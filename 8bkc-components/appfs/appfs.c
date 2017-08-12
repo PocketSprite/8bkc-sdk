@@ -14,6 +14,7 @@ Because of these reasons, only a few operations are available:
 - Modifying a file. This follows the same rules as spi_flash_*  because it maps directly to the underlying flash.
 - Deleting a file
 - Mmap()ping a file
+This makes the interface to appfs more akin to the partition interface than to a real filesystem.
 
 At the moment, appfs is not yet tested with encrypted flash; compatibility is unknown.
 
@@ -47,8 +48,8 @@ is implemented as a singleton.
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include <alloca.h>
 #include <rom/crc.h>
-#include "esp_image_format.h"
 #include "esp_spi_flash.h"
 #include "esp_partition.h"
 #include "esp_log.h"
@@ -81,7 +82,7 @@ typedef struct {
 typedef struct {
 	char name[112]; //Only set for 1st sector of file. Rest has name set to 0xFF 0xFF ...
 	uint32_t size; //in bytes
-	uint8_t next; //next page containing the next 64K of the file; 0 if no next page
+	uint8_t next; //next page containing the next 64K of the file; 0 if no next page (Because allocation always starts at 0 and pages can't refer to a lower page, 0 can never occur normally)
 	uint8_t used; //one of APPFS_USE_*
 	uint8_t reserved[10];
 } AppfsPageInfo;
@@ -104,7 +105,7 @@ static esp_err_t findActiveMeta() {
 	AppfsHeader hdr;
 	for (int sec=0; sec<APPFS_META_CNT; sec++) {
 		//Read header
-		memcpy(&hdr, &appfsMeta[sec], sizeof(AppfsHeader));
+		memcpy(&hdr, &appfsMeta[sec].hdr, sizeof(AppfsHeader));
 		if (memcmp(hdr.magic, APPFS_MAGIC, 8)==0) {
 			//Save serial
 			serial[sec]=hdr.serial;
@@ -116,7 +117,13 @@ static esp_err_t findActiveMeta() {
 			for (int j=0; j<APPFS_PAGES; j++) {
 				crc=crc32_le(crc, (const uint8_t *)&appfsMeta[sec].page[j], APPFS_META_DESC_SZ);
 			}
-			if (crc==expectedCrc) validSec|=(1<<sec);
+			if (crc==expectedCrc) {
+				validSec|=(1<<sec);
+			} else {
+				ESP_LOGD(TAG, "Meta sector %d does not have a valid CRC.", sec);
+			}
+		} else {
+			ESP_LOGD(TAG, "Meta sector %d does not have a valid magic header.", sec);
 		}
 	}
 	//Here, validSec should be a bitmap of sectors that are valid, while serials[] should contain their
@@ -124,18 +131,21 @@ static esp_err_t findActiveMeta() {
 	int best=-1;
 	for (int sec=0; sec<APPFS_META_CNT; sec++) {
 		if (validSec&(1<<sec)) {
-			if (best!=-1 || serial[sec]>serial[best]) best=sec;
+			if (best==-1 || serial[sec]>serial[best]) best=sec;
 		}
-	}
-	//'best' here is either still -1 (no valid sector found) or the sector with the highest valid serial.
-	if (best==-1) {
-		//Eek! Nothing found!
-		return ESP_ERR_NOT_FOUND;
 	}
 
 	ESP_LOGI(TAG, "Meta page 0: %svalid (serial %d)", (validSec&1)?"":"in", serial[0]);
 	ESP_LOGI(TAG, "Meta page 1: %svalid (serial %d)", (validSec&2)?"":"in", serial[1]);
-	ESP_LOGI(TAG, "using page %d as current.", best);
+
+	//'best' here is either still -1 (no valid sector found) or the sector with the highest valid serial.
+	if (best==-1) {
+		ESP_LOGI(TAG, "No valid page found.");
+		//Eek! Nothing found!
+		return ESP_ERR_NOT_FOUND;
+	} else {
+		ESP_LOGI(TAG, "Using page %d as current.", best);
+	}
 	appfsActiveMeta=best;
 	return ESP_OK;
 }
@@ -196,11 +206,11 @@ esp_err_t appfsInit(int type, int subtype) {
 	//Memory map the appfs header so we can Do Stuff with it
 	r=esp_partition_mmap(appfsPart, 0, APPFS_SECTOR_SZ, SPI_FLASH_MMAP_DATA, (const void**)&appfsMeta, &appfsMetaMmapHandle);
 	if (r!=ESP_OK) return r;
-//	if (findActiveMeta()!=ESP_OK) {
+	if (findActiveMeta()!=ESP_OK) {
 		//No valid metadata half-sector found. Initialize the first sector.
 		ESP_LOGE(TAG, "No valid meta info found. Re-initializing fs.");
 		initializeFs();
-//	}
+	}
 	ESP_LOGD(TAG, "Initialized.");
 	return ESP_OK;
 }

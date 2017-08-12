@@ -1,0 +1,4 @@
+*.o
+appfs.img
+mkappfs
+part-*.img
