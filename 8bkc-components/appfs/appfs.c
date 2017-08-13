@@ -72,14 +72,14 @@ static const char *TAG = "appfs";
 #define APPFS_ILLEGAL 0x55		//Sector cannot be used (usually because it's outside the partition)
 #define APPFS_USE_DATA 0		//Sector is in use for data
 
-typedef struct {
+typedef struct  __attribute__ ((__packed__)) {
 	uint8_t magic[8]; //must be AppFsDsc
 	uint32_t serial;
 	uint32_t crc32;
 	uint8_t reserved[128-16];
 } AppfsHeader;
 
-typedef struct {
+typedef struct  __attribute__ ((__packed__)) {
 	char name[112]; //Only set for 1st sector of file. Rest has name set to 0xFF 0xFF ...
 	uint32_t size; //in bytes
 	uint8_t next; //next page containing the next 64K of the file; 0 if no next page (Because allocation always starts at 0 and pages can't refer to a lower page, 0 can never occur normally)
@@ -87,7 +87,7 @@ typedef struct {
 	uint8_t reserved[10];
 } AppfsPageInfo;
 
-typedef struct {
+typedef struct  __attribute__ ((__packed__)) {
 	AppfsHeader hdr;
 	AppfsPageInfo page[APPFS_PAGES];
 } AppfsMeta;
@@ -120,7 +120,7 @@ static esp_err_t findActiveMeta() {
 			if (crc==expectedCrc) {
 				validSec|=(1<<sec);
 			} else {
-				ESP_LOGD(TAG, "Meta sector %d does not have a valid CRC.", sec);
+				ESP_LOGD(TAG, "Meta sector %d does not have a valid CRC (have %X expected %X.", sec, crc, expectedCrc);
 			}
 		} else {
 			ESP_LOGD(TAG, "Meta sector %d does not have a valid magic header.", sec);

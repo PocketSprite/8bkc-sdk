@@ -48,10 +48,20 @@ void trimToFile(char *in, char *out) {
 }
 
 
+void testCrc() {
+	uint32_t d[2]={0x1234567, 0x89abcdef};
+	uint32_t crc=crc32_le(0, &d[0], 7);
+	printf("CRC %X\n", crc);
+}
+
 void main(int argc, void **argv) {
 	esp_err_t r;
+
+//	testCrc();
+
 	if (argc<3) {
 		printf("Usage: %s size-in-bytes file1 [file2 ...]\n", argv[0]);
+		exit(1);
 	}
 
 	createFile(strtol(argv[1], NULL, 0));
