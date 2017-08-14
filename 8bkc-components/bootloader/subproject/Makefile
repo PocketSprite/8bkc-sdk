@@ -8,7 +8,7 @@ endif
 
 PROJECT_NAME := bootloader
 
-COMPONENTS := esptool_py bootloader_support log spi_flash micro-ecc soc main
+COMPONENTS := esptool_py bootloader_support log spi_flash micro-ecc soc main appfs
 
 #We cannot include the esp32 component directly but we need its includes.
 CFLAGS += -I $(IDF_PATH)/components/esp32/include

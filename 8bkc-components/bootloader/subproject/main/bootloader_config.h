@@ -33,6 +33,7 @@ typedef struct {
     esp_partition_pos_t factory;
     esp_partition_pos_t test;
     esp_partition_pos_t ota[16];
+    esp_partition_pos_t appfs;
     uint32_t app_count;
     uint32_t selected_subtype;
 } bootloader_state_t;

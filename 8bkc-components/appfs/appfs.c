@@ -56,7 +56,6 @@ is implemented as a singleton.
 #include "esp_err.h"
 #include "appfs.h"
 
-#include "hexdump.h"
 
 static const char *TAG = "appfs";
 
@@ -92,10 +91,12 @@ typedef struct  __attribute__ ((__packed__)) {
 	AppfsPageInfo page[APPFS_PAGES];
 } AppfsMeta;
 
-static const esp_partition_t *appfsPart=NULL;
 static int appfsActiveMeta=0; //number of currently active metadata half-sector (0 or 1)
 static const AppfsMeta *appfsMeta=NULL; //mmap'ed flash
+#ifndef BOOTLOADER_BUILD
+static const esp_partition_t *appfsPart=NULL;
 static spi_flash_mmap_handle_t appfsMetaMmapHandle;
+#endif
 
 //Find active meta half-sector. Updates appfsActiveMeta to the most current one and returns ESP_OK success.
 //Returns ESP_ERR_NOT_FOUND when no active metasector is found.
@@ -150,6 +151,62 @@ static esp_err_t findActiveMeta() {
 	return ESP_OK;
 }
 
+
+static int appfsGetFirstPageFor(const char *filename) {
+	for (int j=0; j<APPFS_PAGES; j++) {
+		if (appfsMeta[appfsActiveMeta].page[j].used==APPFS_USE_DATA && strcmp(appfsMeta[appfsActiveMeta].page[j].name, filename)==0) {
+			return j;
+		}
+	}
+	//Nothing found.
+	return -1;
+}
+
+static bool appfsFdValid(int fd) {
+	if (fd<0 || fd>=APPFS_PAGES) return false;
+	if (appfsMeta[appfsActiveMeta].page[(int)fd].used!=APPFS_USE_DATA) return false;
+	if (appfsMeta[appfsActiveMeta].page[(int)fd].name[0]==0xff) return false;
+	return true;
+}
+
+int appfsExists(char *filename) {
+	return (appfsGetFirstPageFor(filename)==-1)?0:1;
+}
+
+appfs_handle_t appfsOpen(char *filename) {
+	return appfsGetFirstPageFor(filename);
+}
+
+void appfsClose(appfs_handle_t handle) {
+	//Not needed in this implementation. Added for possible later use (concurrency?)
+}
+
+#ifdef BOOTLOADER_BUILD
+
+#include "bootloader_flash.h"
+
+esp_err_t appfsBlInit(uint32_t offset, uint32_t len) {
+	//Compile-time sanity check on size of structs
+	_Static_assert(sizeof(AppfsHeader)==APPFS_META_DESC_SZ, "sizeof AppfsHeader != 128bytes");
+	_Static_assert(sizeof(AppfsPageInfo)==APPFS_META_DESC_SZ, "sizeof AppfsPageInfo != 128bytes");
+	_Static_assert(sizeof(AppfsMeta)==APPFS_META_SZ, "sizeof AppfsMeta != APPFS_META_SZ");
+	//Map meta page
+	appfsMeta=bootloader_mmap(offset, APPFS_SECTOR_SZ);
+	if (!appfsMeta) return ESP_ERR_NOT_FOUND;
+	if (findActiveMeta()!=ESP_OK) {
+		//No valid metadata half-sector found. Initialize the first sector.
+		ESP_LOGE(TAG, "No valid meta info found. Bailing out.");
+		return ESP_ERR_NOT_FOUND;
+	}
+	ESP_LOGD(TAG, "Initialized.");
+	return ESP_OK;
+}
+
+void appfsBlDeinit() {
+	bootloader_munmap(appfsMeta);
+}
+
+#else //so if !BOOTLOADER_BUILD
 
 //Modifies the header in hdr to the correct crc and writes it to meta info no metano.
 //Assumes the serial etc is in order already, and the header section for metano has been erased.
@@ -215,38 +272,11 @@ esp_err_t appfsInit(int type, int subtype) {
 	return ESP_OK;
 }
 
-static int appfsGetFirstPageFor(const char *filename) {
-	for (int j=0; j<APPFS_PAGES; j++) {
-		if (appfsMeta[appfsActiveMeta].page[j].used==APPFS_USE_DATA && strcmp(appfsMeta[appfsActiveMeta].page[j].name, filename)==0) {
-			return j;
-		}
-	}
-	//Nothing found.
-	return -1;
-}
-
-static bool appfsFdValid(int fd) {
-	if (fd<0 || fd>=APPFS_PAGES) return false;
-	if (appfsMeta[appfsActiveMeta].page[(int)fd].used!=APPFS_USE_DATA) return false;
-	if (appfsMeta[appfsActiveMeta].page[(int)fd].name[0]==0xff) return false;
-	return true;
-}
 
 static esp_err_t writePageInfo(int newMeta, int page, AppfsPageInfo *pi) {
 	return esp_partition_write(appfsPart, newMeta*APPFS_META_SZ+(page+1)*APPFS_META_DESC_SZ, pi, sizeof(AppfsPageInfo));
 }
 
-int appfsExists(char *filename) {
-	return (appfsGetFirstPageFor(filename)==-1)?0:1;
-}
-
-appfs_handle_t appfsOpen(char *filename) {
-	return appfsGetFirstPageFor(filename);
-}
-
-void appfsClose(appfs_handle_t handle) {
-	//Not needed in this implementation. Added for possible later use (concurrency?)
-}
 
 //This essentially writes a new meta page without any references to the file indicated.
 esp_err_t appfsDeleteFile(char *filename) {
@@ -479,3 +509,5 @@ void appfsDump() {
 		}
 	}
 }
+
+#endif

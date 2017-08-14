@@ -50,6 +50,10 @@
 #include "bootloader_config.h"
 
 #include "flash_qio_mode.h"
+#include "appfs.h"
+
+/* until it's official */
+#define PART_SUBTYPE_DATA_APPFS 3
 
 extern int _bss_start;
 extern int _bss_end;
@@ -214,6 +218,10 @@ bool load_partition_table(bootloader_state_t* bs)
             case PART_SUBTYPE_DATA_WIFI:
                 partition_usage = "WiFi data";
                 break;
+            case PART_SUBTYPE_DATA_APPFS:
+                partition_usage = "AppFs";
+                bs->appfs = partition->pos;
+                break;
             default:
                 partition_usage = "Unknown data";
                 break;
@@ -258,9 +266,7 @@ void bootloader_main()
     uart_console_configure();
     wdt_reset_check();
     ESP_LOGI(TAG, "ESP-IDF %s 2nd stage bootloader", IDF_VER);
-#if defined(CONFIG_SECURE_BOOT_ENABLED) || defined(CONFIG_FLASH_ENCRYPTION_ENABLED)
     esp_err_t err;
-#endif
     esp_image_header_t fhdr;
     bootloader_state_t bs;
     esp_rom_spiflash_result_t spiRet1,spiRet2;
@@ -309,6 +315,21 @@ void bootloader_main()
     }
 
     esp_partition_pos_t load_part_pos;
+
+    if (bs.appfs.offset != 0) {
+        //We have an appfs
+        ESP_LOGI(TAG, "AppFs found");
+        err=appfsBlInit(bs.appfs.offset, bs.appfs.size);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "AppFs initialization failed");
+            return;
+        }
+        if (appfsExists("chooser.app")) {
+            ESP_LOGI(TAG, "Found chooser app in appfs. Starting.\n");
+            //...
+        }
+        appfsBlDeinit();
+    }
 
     if (bs.ota_info.offset != 0) {              // check if partition table has OTA info partition
         //ESP_LOGE("OTA info sector handling is not implemented");
