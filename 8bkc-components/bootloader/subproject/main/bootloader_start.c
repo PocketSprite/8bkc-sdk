@@ -253,6 +253,7 @@ static bool ota_select_valid(const esp_ota_select_entry_t *s)
   return s->ota_seq != UINT32_MAX && s->crc == ota_select_crc(s);
 }
 
+
 /**
  *  @function :     bootloader_main
  *  @description:   entry function of 2nd bootloader
@@ -315,6 +316,7 @@ void bootloader_main()
     }
 
     esp_partition_pos_t load_part_pos;
+    const char *appName="chooser.app";
 
     if (bs.appfs.offset != 0) {
         //We have an appfs
@@ -324,9 +326,49 @@ void bootloader_main()
             ESP_LOGE(TAG, "AppFs initialization failed");
             return;
         }
-        if (appfsExists("chooser.app")) {
-            ESP_LOGI(TAG, "Found chooser app in appfs. Starting.\n");
-            //...
+        if (appfsExists(appName)) {
+            ESP_LOGI(TAG, "Found %s in appfs. Starting.", appName);
+            appfs_handle_t fd=appfsOpen(appName);
+            uint8_t *appBytes=appfsBlMmap(fd);
+
+            const esp_image_header_t *hdr=(const esp_image_header_t*)appBytes;
+            err=esp_image_verify_image_header(0, hdr, false);
+            if (err!=ESP_OK) return;
+            uint32_t entry_addr=hdr->entry_addr;
+
+            AppfsBlRegionToMap mapRegions[8];
+            int noMaps=0;
+            uint8_t *p=appBytes+sizeof(esp_image_header_t);
+            for (int i=0; i<hdr->segment_count; i++) {
+                esp_image_segment_header_t *shdr=(esp_image_segment_header_t*)p;
+                p+=sizeof(esp_image_segment_header_t);
+                if (esp_image_segaddr_should_load(shdr->load_addr)) {
+                    ESP_LOGI(TAG, "Segment %d: load to %X size %X", i, shdr->load_addr, shdr->data_len);
+                    memcpy((void*)shdr->load_addr, p, shdr->data_len);
+                } else if (esp_image_segaddr_should_map(shdr->load_addr)) {
+                    mapRegions[noMaps].fileAddr=p-appBytes;
+                    mapRegions[noMaps].mapAddr=shdr->load_addr;
+                    mapRegions[noMaps].length=shdr->data_len;
+                    noMaps++;
+                    ESP_LOGI(TAG, "Segment %d: map to %X size %X", i, shdr->load_addr, shdr->data_len);
+                } else {
+                    ESP_LOGI(TAG, "Segment %d: ignore (addr %X) size %X", i, shdr->load_addr, shdr->data_len);
+                }
+                int l=(shdr->data_len+3)&(~3);
+                p+=l;
+            }
+            appfsBlMunmap(); //unmap 
+
+            ESP_LOGI(TAG, "Disabling RNG early entropy source...");
+            bootloader_random_disable();
+
+            appfsBlMapRegions(fd, mapRegions, noMaps);
+            ESP_LOGD(TAG, "start: 0x%08x", entry_addr);
+            typedef void (*entry_t)(void);
+            entry_t entry = ((entry_t) entry_addr);
+            (*entry)();
+        } else {
+            ESP_LOGI(TAG, "Did not find %s in appfs. Starting default firmware.\n", appName);
         }
         appfsBlDeinit();
     }

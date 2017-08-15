@@ -55,7 +55,7 @@ is implemented as a singleton.
 #include "esp_log.h"
 #include "esp_err.h"
 #include "appfs.h"
-
+#include "rom/cache.h"
 
 static const char *TAG = "appfs";
 
@@ -96,6 +96,8 @@ static const AppfsMeta *appfsMeta=NULL; //mmap'ed flash
 #ifndef BOOTLOADER_BUILD
 static const esp_partition_t *appfsPart=NULL;
 static spi_flash_mmap_handle_t appfsMetaMmapHandle;
+#else
+static uint32_t appfsPartOffset=0;
 #endif
 
 //Find active meta half-sector. Updates appfsActiveMeta to the most current one and returns ESP_OK success.
@@ -184,6 +186,10 @@ void appfsClose(appfs_handle_t handle) {
 #ifdef BOOTLOADER_BUILD
 
 #include "bootloader_flash.h"
+#include "soc/soc.h"
+#include "soc/cpu.h"
+#include "soc/rtc.h"
+#include "soc/dport_reg.h"
 
 esp_err_t appfsBlInit(uint32_t offset, uint32_t len) {
 	//Compile-time sanity check on size of structs
@@ -198,12 +204,106 @@ esp_err_t appfsBlInit(uint32_t offset, uint32_t len) {
 		ESP_LOGE(TAG, "No valid meta info found. Bailing out.");
 		return ESP_ERR_NOT_FOUND;
 	}
+	appfsPartOffset=offset;
 	ESP_LOGD(TAG, "Initialized.");
 	return ESP_OK;
 }
 
 void appfsBlDeinit() {
 	bootloader_munmap(appfsMeta);
+}
+
+#define MMU_BLOCK0_VADDR  0x3f400000
+#define MMU_BLOCK50_VADDR 0x3f720000
+#define MMU_FLASH_MASK    0xffff0000
+#define MMU_BLOCK_SIZE    0x00010000
+
+esp_err_t appfsBlMapRegions(int fd, AppfsBlRegionToMap *regions, int noRegions) {
+	uint8_t pages[255];
+	int pageCt=0;
+	int page=fd;
+	do {
+		pages[pageCt++]=page;
+		page=appfsMeta[appfsActiveMeta].page[page].next;
+	} while (page!=0);
+	//Okay, we have our info.
+	bootloader_munmap(appfsMeta);
+
+    Cache_Read_Disable( 0 );
+    Cache_Flush( 0 );
+    for (int i = 0; i < DPORT_FLASH_MMU_TABLE_SIZE; i++) {
+        DPORT_PRO_FLASH_MMU_TABLE[i] = DPORT_FLASH_MMU_TABLE_INVALID_VAL;
+    }
+
+
+	for (int i=0; i<noRegions; i++) {
+		uint32_t p=regions[i].fileAddr/APPFS_SECTOR_SZ;
+		uint32_t d=regions[i].mapAddr&~(APPFS_SECTOR_SZ-1);
+		for (uint32_t a=0; a<regions[i].length; a+=APPFS_SECTOR_SZ) {
+			ESP_LOGI(TAG, "Flash mmap seg %d: %X from %X", i, d, appfsPartOffset+((pages[p]+1)*APPFS_SECTOR_SZ));
+			for (int cpu=0; cpu<2; cpu++) {
+				int e = cache_flash_mmu_set(cpu, 0, d, appfsPartOffset+((pages[p]+1)*APPFS_SECTOR_SZ), 64, 1);
+				if (e != 0) {
+					ESP_LOGE(TAG, "cache_flash_mmu_set failed for cpu %d: %d\n", cpu, e);
+					Cache_Read_Enable(0);
+					return ESP_ERR_NO_MEM;
+				}
+			}
+			d+=APPFS_SECTOR_SZ;
+			p++;
+		}
+	}
+    DPORT_REG_CLR_BIT( DPORT_PRO_CACHE_CTRL1_REG, (DPORT_PRO_CACHE_MASK_IRAM0) | (DPORT_PRO_CACHE_MASK_IRAM1 & 0) | (DPORT_PRO_CACHE_MASK_IROM0 & 0) | DPORT_PRO_CACHE_MASK_DROM0 | DPORT_PRO_CACHE_MASK_DRAM1 );
+    DPORT_REG_CLR_BIT( DPORT_APP_CACHE_CTRL1_REG, (DPORT_APP_CACHE_MASK_IRAM0) | (DPORT_APP_CACHE_MASK_IRAM1 & 0) | (DPORT_APP_CACHE_MASK_IROM0 & 0) | DPORT_APP_CACHE_MASK_DROM0 | DPORT_APP_CACHE_MASK_DRAM1 );
+    Cache_Read_Enable( 0 );
+	return ESP_OK;
+}
+
+void* appfsBlMmap(int fd) {
+	//We want to mmap() the pages of the file into memory. However, to do that we need to kill the mmap for the 
+	//meta info. To do this, we collect the pages before unmapping the meta info.
+	uint8_t pages[255];
+	int pageCt=0;
+	int page=fd;
+	do {
+		pages[pageCt++]=page;
+		page=appfsMeta[appfsActiveMeta].page[page].next;
+	} while (page!=0);
+	ESP_LOGI(TAG, "File %d has %d pages.\n", fd, pageCt);
+	
+	if (pageCt>50) {
+		ESP_LOGE(TAG, "appfsBlMmap: file too big to mmap");
+		return NULL;
+	}
+	
+	//Okay, we have our info.
+	bootloader_munmap(appfsMeta);
+	//Bootloader_mmap only allows mapping of one consecutive memory range. We need more than that, so we essentially
+	//replicate the function here.
+	
+	Cache_Read_Disable(0);
+	Cache_Flush(0);
+	for (int i=0; i<pageCt; i++) {
+		ESP_LOGI(TAG, "Mapping flash addr %X to mem addr %X for page %d", appfsPartOffset+((pages[i]+1)*APPFS_SECTOR_SZ), MMU_BLOCK0_VADDR+(i*APPFS_SECTOR_SZ), pages[i]);
+		int e = cache_flash_mmu_set(0, 0, MMU_BLOCK0_VADDR+(i*APPFS_SECTOR_SZ), 
+						appfsPartOffset+((pages[i]+1)*APPFS_SECTOR_SZ), 64, 1);
+		if (e != 0) {
+			ESP_LOGE(TAG, "cache_flash_mmu_set failed: %d\n", e);
+			Cache_Read_Enable(0);
+			return NULL;
+		}
+	}
+	Cache_Read_Enable(0);
+	return (void *)(MMU_BLOCK0_VADDR);
+}
+
+void appfsBlMunmap() {
+	/* Full MMU reset */
+	Cache_Read_Disable(0);
+	Cache_Flush(0);
+	mmu_init(0);
+	//Map meta page
+	appfsMeta=bootloader_mmap(appfsPartOffset, APPFS_SECTOR_SZ);
 }
 
 #else //so if !BOOTLOADER_BUILD

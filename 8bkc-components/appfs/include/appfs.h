@@ -22,8 +22,18 @@ void appfsDump();
 
 #ifdef BOOTLOADER_BUILD
 #include "bootloader_flash.h"
+typedef struct {
+	uint32_t fileAddr;
+	uint32_t mapAddr;
+	uint32_t length;
+} AppfsBlRegionToMap;
+
 esp_err_t appfsBlInit(uint32_t offset, uint32_t len);
 void appfsBlDeinit();
+void* appfsBlMmap(int fd);
+void appfsBlMunmap();
+esp_err_t appfsBlMapRegions(int fd, AppfsBlRegionToMap *regions, int noRegions);
+
 #endif
 
 #endif

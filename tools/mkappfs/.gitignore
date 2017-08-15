@@ -1,5 +1,0 @@
-*.o
-appfs.img
-mkappfs
-part-*.img
-partemu/*.o
