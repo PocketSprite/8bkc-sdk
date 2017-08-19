@@ -48,7 +48,7 @@ void hexdump(void *mem, int len) {
 
 //Uncomment the following line and compile 'gcc -o hexdump hexdump.c' to create a barebones hexdump utility that
 //reads stdin and dumps the hex content of it to stdout
-#define TESTCASE
+//#define TESTCASE
 
 #ifdef TESTCASE
 #include <stdlib.h>
