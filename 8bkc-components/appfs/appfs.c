@@ -260,14 +260,13 @@ esp_err_t appfsBlMapRegions(int fd, AppfsBlRegionToMap *regions, int noRegions) 
 	} while (page!=0);
 	//Okay, we have our info.
 	bootloader_munmap(appfsMeta);
-
-    Cache_Read_Disable( 0 );
-    Cache_Flush( 0 );
-    for (int i = 0; i < DPORT_FLASH_MMU_TABLE_SIZE; i++) {
-        DPORT_PRO_FLASH_MMU_TABLE[i] = DPORT_FLASH_MMU_TABLE_INVALID_VAL;
-    }
-
-
+	
+	Cache_Read_Disable( 0 );
+	Cache_Flush( 0 );
+	for (int i = 0; i < DPORT_FLASH_MMU_TABLE_SIZE; i++) {
+		DPORT_PRO_FLASH_MMU_TABLE[i] = DPORT_FLASH_MMU_TABLE_INVALID_VAL;
+	}
+	
 	for (int i=0; i<noRegions; i++) {
 		uint32_t p=regions[i].fileAddr/APPFS_SECTOR_SZ;
 		uint32_t d=regions[i].mapAddr&~(APPFS_SECTOR_SZ-1);
@@ -285,9 +284,9 @@ esp_err_t appfsBlMapRegions(int fd, AppfsBlRegionToMap *regions, int noRegions) 
 			p++;
 		}
 	}
-    DPORT_REG_CLR_BIT( DPORT_PRO_CACHE_CTRL1_REG, (DPORT_PRO_CACHE_MASK_IRAM0) | (DPORT_PRO_CACHE_MASK_IRAM1 & 0) | (DPORT_PRO_CACHE_MASK_IROM0 & 0) | DPORT_PRO_CACHE_MASK_DROM0 | DPORT_PRO_CACHE_MASK_DRAM1 );
-    DPORT_REG_CLR_BIT( DPORT_APP_CACHE_CTRL1_REG, (DPORT_APP_CACHE_MASK_IRAM0) | (DPORT_APP_CACHE_MASK_IRAM1 & 0) | (DPORT_APP_CACHE_MASK_IROM0 & 0) | DPORT_APP_CACHE_MASK_DROM0 | DPORT_APP_CACHE_MASK_DRAM1 );
-    Cache_Read_Enable( 0 );
+	DPORT_REG_CLR_BIT( DPORT_PRO_CACHE_CTRL1_REG, (DPORT_PRO_CACHE_MASK_IRAM0) | (DPORT_PRO_CACHE_MASK_IRAM1 & 0) | (DPORT_PRO_CACHE_MASK_IROM0 & 0) | DPORT_PRO_CACHE_MASK_DROM0 | DPORT_PRO_CACHE_MASK_DRAM1 );
+	DPORT_REG_CLR_BIT( DPORT_APP_CACHE_CTRL1_REG, (DPORT_APP_CACHE_MASK_IRAM0) | (DPORT_APP_CACHE_MASK_IRAM1 & 0) | (DPORT_APP_CACHE_MASK_IROM0 & 0) | DPORT_APP_CACHE_MASK_DROM0 | DPORT_APP_CACHE_MASK_DRAM1 );
+	Cache_Read_Enable( 0 );
 	return ESP_OK;
 }
 
@@ -541,6 +540,7 @@ esp_err_t appfsMmap(appfs_handle_t fd, size_t offset, size_t len, const void** o
 	if (!appfsFdValid(page)) return ESP_ERR_NOT_FOUND;
 	ESP_LOGD(TAG, "Mmapping file %s, offset %d, size %d", appfsMeta[appfsActiveMeta].page[page].name, offset, len);
 	if (appfsMeta[appfsActiveMeta].page[page].size < (offset+len)) {
+		ESP_LOGD(TAG, "Can't map file: trying to map byte %d in file of len %d\n", (offset+len), appfsMeta[appfsActiveMeta].page[page].size);
 		return ESP_ERR_INVALID_SIZE;
 	}
 	int dataStartPage=(appfsPart->address/SPI_FLASH_MMU_PAGE_SIZE)+1;
@@ -551,15 +551,19 @@ esp_err_t appfsMmap(appfs_handle_t fd, size_t offset, size_t len, const void** o
 
 	int *pages=alloca(sizeof(int)*((len/APPFS_SECTOR_SZ)+1));
 	int nopages=0;
-	while(len>0) {
+	size_t mappedlen=0;
+	while(len>mappedlen) {
 		pages[nopages++]=page+dataStartPage;
 		ESP_LOGD(TAG, "Mapping page %d (part offset %d).", page, dataStartPage);
 		page=appfsMeta[appfsActiveMeta].page[page].next;
-		len-=APPFS_SECTOR_SZ;
+		mappedlen+=APPFS_SECTOR_SZ;
 	}
 
 	r=spi_flash_mmap_pages(pages, nopages, memory, out_ptr, out_handle);
-	if (r!=ESP_OK) return r;
+	if (r!=ESP_OK) {
+		ESP_LOGD(TAG, "Can't map file: pi_flash_mmap_pages returned %d\n", r);
+		return r;
+	}
 	*out_ptr=((uint8_t*)*out_ptr)+offset;
 	return ESP_OK;
 }

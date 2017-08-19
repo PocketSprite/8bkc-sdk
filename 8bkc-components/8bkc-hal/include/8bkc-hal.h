@@ -1,6 +1,8 @@
 #ifndef KC_HAL_H
 #define KC_HAL_H
 
+#include <stdint.h>
+
 #define KC_BTN_RIGHT (1<<0)
 #define KC_BTN_LEFT (1<<1)
 #define KC_BTN_UP (1<<2)
@@ -29,7 +31,7 @@ uint32_t kchal_get_keys();
 
 void kchal_send_fb(void *fb);
 
-void kchal_sound_rate(int rate);
+void kchal_sound_start(int rate, int buffsize);
 
 void kchal_sound_push(uint8_t *buf, int len);
 
@@ -45,4 +47,5 @@ void kchal_set_new_app(int fd);
 int kchal_get_new_app();
 void kchal_boot_into_new_app();
 
+void kchal_set_contrast(int contrast);
 #endif

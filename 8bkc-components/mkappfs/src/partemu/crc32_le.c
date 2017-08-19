@@ -14,33 +14,6 @@ static unsigned reverse(unsigned x) {
 }
 
 
-#if 0
-// ----------------------------- crc32a --------------------------------
-
-/* This is the basic CRC algorithm with no optimizations. It follows the
-logic circuit as closely as possible. */
-
-unsigned int crc32_le(uint32_t crc, unsigned char *message, int len) {
-   int i, j;
-   unsigned int byte;
-
-   i = 0;
-   crc = 0xFFFFFFFF;
-   while (message[i] != 0) {
-      byte = message[i];            // Get next byte.
-      byte = reverse(byte);         // 32-bit reversal.
-      for (j = 0; j <= 7; j++) {    // Do eight times.
-         if ((int)(crc ^ byte) < 0)
-              crc = (crc << 1) ^ 0x04C11DB7;
-         else crc = crc << 1;
-         byte = byte << 1;          // Ready next msg bit.
-      }
-      i = i + 1;
-   }
-   return reverse(~crc);
-}
-
-#else
 static uint32_t crc32_tab[] = {
 	0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f,
 	0xe963a535, 0x9e6495a3,	0x0edb8832, 0x79dcb8a4, 0xe0d5e91e, 0x97d2d988,
@@ -100,4 +73,3 @@ crc32_le(uint32_t crc, const void *buf, size_t size)
 
 	return crc ^ ~0U;
 }
-#endif

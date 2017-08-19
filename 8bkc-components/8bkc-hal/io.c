@@ -44,8 +44,6 @@
 #define GPIO_PWMB 0
 #define GPIO_PWMA 0
 #define GPIO_DAC (1<<26)
-//#define GPIO_CHGDET (1<<19) //battery is charging
-//#define GPIO_STDBY (1<<14)  //micro-usb plugged and bat full
 #define GPIO_CHGDET (1<<19) //battery is charging, low-active
 #define GPIO_CHGSTDBY ((uint64_t)1<<36)  //micro-usb plugged
 #define GPIO_VBAT ((uint64_t)1<<36)

@@ -11,6 +11,7 @@
 #include "8bkc-hal.h"
 #include "io.h"
 #include "ssd1331.h"
+#include "appfs.h"
 
 SemaphoreHandle_t oledMux;
 
@@ -79,7 +80,7 @@ static void kchal_mgmt_task(void *arg) {
 					setLed(0x0400);
 				}
 			} else if (chgStatus==IO_CHG_FULL) {
-					setLed(0x07E0);
+				setLed(0x07E0);
 			}
 		}
 		vTaskDelay(500/portTICK_PERIOD_MS);
@@ -90,12 +91,17 @@ void kchal_init() {
 	oledMux=xSemaphoreCreateMutex();
 	//Initialize IO
 	ioInit();
+	//Init appfs
+	esp_err_t r=appfsInit(1, 3);
+	assert(r==ESP_OK);
+	printf("Appfs inited.\n");
 	//Clear entire OLED screen
 	uint16_t *fb=malloc(OLED_REAL_H*OLED_REAL_W*2);
+	assert(fb);
 	memset(fb, 0, OLED_REAL_H*OLED_REAL_W*2);
 	ssd1331SendFB(fb, 0, 0, OLED_REAL_W, OLED_REAL_H);
 	free(fb);
-	xTaskCreatePinnedToCore(&kchal_mgmt_task, "kchal", 1024, NULL, 5, NULL, 1);
+	xTaskCreatePinnedToCore(&kchal_mgmt_task, "kchal", 1024, NULL, 5, NULL, 0);
 }
 
 uint32_t kchal_get_keys() {
@@ -125,7 +131,7 @@ void kchal_sound_start(int rate, int buffsize) {
 		.communication_format=I2S_COMM_FORMAT_I2S_MSB,
 		.intr_alloc_flags=0,
 		.dma_buf_count=4,
-		.dma_buf_len=256
+		.dma_buf_len=buffsize/4
 	};
 	i2s_driver_install(0, &cfg, 4, &soundQueue);
 	i2s_set_pin(0, NULL);
@@ -148,13 +154,13 @@ void kchal_sound_push(uint8_t *buf, int len) {
 		int plen=len-i;
 		if (plen>SND_CHUNKSZ) plen=SND_CHUNKSZ;
 		for (int j=0; j<plen; j++) {
-			int s=((((int)buf[i])-128)*volume); //Make [-128,127], multiply with volume
-			s=(s<<8)+128; //divide off volume max, get back to [0-255]
+			int s=((((int)buf[i+j])-128)*volume); //Make [-128,127], multiply with volume
+			s=(s>>8)+128; //divide off volume max, get back to [0-255]
 			if (s>255) s=255;
 			if (s<0) s=0;
-			tmpb[i]=((s)<<8)+((s)<<24);
+			tmpb[j]=((s)<<8)+((s)<<24);
 		}
-		i2s_write_bytes(0, (char*)tmpb, SND_CHUNKSZ*4, portMAX_DELAY);
+		i2s_write_bytes(0, (char*)tmpb, plen*4, portMAX_DELAY);
 		i+=plen;
 	}
 }
@@ -186,3 +192,6 @@ void kchal_boot_into_new_app() {
 	esp_deep_sleep_start();
 }
 
+void kchal_set_contrast(int contrast) {
+	ssd1331SetContrast(contrast);
+}

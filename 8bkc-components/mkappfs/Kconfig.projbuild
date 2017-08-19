@@ -8,9 +8,9 @@ config APPFS_PART_OFFSET
 	hex "AppFs partition offset"
 	default 0xA0000
 
-#config APPFS_EXTRA_FILES
-#	string "AppFs extra files"
-#	default ""
+config APPFS_EXTRA_FILES
+	string "AppFs extra files"
+	default ""
 
 
 endmenu

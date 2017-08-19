@@ -1,14 +1,15 @@
 MKAPPFSDIR := $(COMPONENT_PATH)
 MKAPPFS := $(MKAPPFSDIR)/src/mkappfs
-APPFS_IMG := appfs.img
-APPFS_FILES := $(APP_BIN_UNSIGNED):$(notdir $(APP_BIN_UNSIGNED:.bin=.app))
-# $(CONFIG_APPFS_EXTRA_FILES)
+APPFS_IMG := $(BUILD_DIR_BASE)/appfs.img
+APPFS_BASE_FILES := $(wildcard $(addprefix $(PROJECT_PATH)/,$(call dequote,$(CONFIG_APPFS_EXTRA_FILES))))
+APPFS_FILES := $(foreach f, $(APPFS_BASE_FILES), $(f):$(notdir $(f))) $(APP_BIN_UNSIGNED):$(notdir $(APP_BIN_UNSIGNED:.bin=.app)) 
 
 $(MKAPPFS): $(MKAPPFSDIR)/src
-	make -C $(MKAPPFSDIR)/src
+	#Uses a slight hack to compile mkappfs using plain ole C flags
+	MAKEFLAGS="" CC=gcc make -C $(MKAPPFSDIR)/src
 
 $(APPFS_IMG): $(APP_BIN_UNSIGNED) $(MKAPPFS)
-	$(MKAPPFS) $(CONFIG_APPFS_PART_SIZE) $(APPFS_FILES)
+	cd $(BUILD_DIR_BASE); $(MKAPPFS) $(CONFIG_APPFS_PART_SIZE) $(APPFS_FILES)
 
 flash_appfs: $(APPFS_IMG) $(ESPTOOLPY_SRC) $(call prereq_if_explicit,erase_flash)
 	@echo "Flashing appfs to serial port $(ESPPORT), offset $(CONFIG_APPFS_PART_OFFSET)..."
