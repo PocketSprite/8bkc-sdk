@@ -14,6 +14,8 @@
 #include "ssd1331.h"
 #include "esp_deep_sleep.h"
 #include "driver/rtc_io.h"
+#include "8bkc-hal.h" //for button codes
+
 
 //Buttons. Pressing a button pulls down the associated GPIO
 #define GPIO_BTN_RIGHT (1<<21)
@@ -38,23 +40,30 @@
 #define GPIO_OLED_DC (1<<22)
 #define GPIO_OLED_DAT (1<<GPIO_OLED_DAT_PIN)
 
+//DAC for sound
+#define GPIO_PWMB 0
+#define GPIO_PWMA 0
 #define GPIO_DAC (1<<26)
-#define GPIO_CHGDET (1<<19) //battery is charging
-#define GPIO_STDBY (1<<14)  //micro-usb plugged and bat full
+//#define GPIO_CHGDET (1<<19) //battery is charging
+//#define GPIO_STDBY (1<<14)  //micro-usb plugged and bat full
+#define GPIO_CHGDET (1<<19) //battery is charging, low-active
+#define GPIO_CHGSTDBY ((uint64_t)1<<36)  //micro-usb plugged
 #define GPIO_VBAT ((uint64_t)1<<36)
 #define GPIO_14VEN_PIN 17
 #define GPIO_OLED_PWR ((1<<2)|(1<<13))
 
-#define GPIO_14VEN (1<<GPIO_14VEN_PIN) //High enables 14V generation for OLED
+#define GPIO_14VEN (1<<GPIO_14VEN_PIN) //High enables 14V generation for OLED (and audio amp)
+
+
+
 
 #define OLED_SPI_NUM HSPI_HOST
 
 spi_device_handle_t oled_spi_handle;
 
 
-//For D/C handling
-static void oled_spi_pre_transfer_callback(spi_transaction_t *t) 
-{
+//For D/C handling to OLED
+static void oled_spi_pre_transfer_callback(spi_transaction_t *t) {
 	int dc=(int)t->user;
 	WRITE_PERI_REG(dc?GPIO_OUT_W1TS_REG:GPIO_OUT_W1TC_REG, GPIO_OLED_DC);
 }
@@ -72,7 +81,19 @@ void ioOledSend(char *data, int count, int dc) {
 	assert(ret==ESP_OK);            //Should have had no issues.
 }
 
-void quitEmu();
+int ioGetChgStatus() {
+	uint64_t io=((uint64_t)GPIO.in1.data<<32)|GPIO.in;
+	if ((io&GPIO_CHGSTDBY)==0) {
+		return IO_CHG_NOCHARGER;
+	} else {
+		if ((io&GPIO_CHGDET)==0) {
+			return IO_CHG_CHARGING;
+		} else {
+			return IO_CHG_FULL;
+		}
+	}
+}
+
 
 int ioJoyReadInput() {
 	int i=0;
@@ -83,15 +104,10 @@ int ioJoyReadInput() {
 	//Ignore remnants from 1st power press
 	if ((io&GPIO_BTN_PWR)) {
 		if (!initial) {
-			i|=0x100;
+			i|=KC_BTN_POWER;
 			if (!powerWasPressed) powerPressedTime=xTaskGetTickCount();
-			//Quit emu after being pressed for 2 seconds
 			if ((xTaskGetTickCount()-powerPressedTime)>(2000/portTICK_PERIOD_MS)) {
-				quitEmu();
-			}
-			//Force power down after being pressed for 6 seconds.
-			if ((xTaskGetTickCount()-powerPressedTime)>(6000/portTICK_PERIOD_MS)) {
-				ioPowerDown();
+				i|=KC_BTN_POWER_LONG;
 			}
 			powerWasPressed=1;
 		}
@@ -99,14 +115,14 @@ int ioJoyReadInput() {
 		initial=0;
 		powerWasPressed=0;
 	}
-	if (!(io&GPIO_BTN_RIGHT)) i|=PAD_RIGHT;
-	if (!(io&GPIO_BTN_LEFT)) i|=PAD_LEFT;
-	if (!(io&GPIO_BTN_UP)) i|=PAD_UP;
-	if (!(io&GPIO_BTN_DOWN)) i|=PAD_DOWN;
-	if (!(io&GPIO_BTN_SELECT)) i|=PAD_SELECT;
-	if (!(io&GPIO_BTN_START)) i|=PAD_START;
-	if (!(io&GPIO_BTN_A)) i|=PAD_A;
-	if (!(io&GPIO_BTN_B)) i|=PAD_B;
+	if (!(io&GPIO_BTN_RIGHT)) i|=KC_BTN_RIGHT;
+	if (!(io&GPIO_BTN_LEFT)) i|=KC_BTN_LEFT;
+	if (!(io&GPIO_BTN_UP)) i|=KC_BTN_UP;
+	if (!(io&GPIO_BTN_DOWN)) i|=KC_BTN_DOWN;
+	if (!(io&GPIO_BTN_SELECT)) i|=KC_BTN_SELECT;
+	if (!(io&GPIO_BTN_START)) i|=KC_BTN_START;
+	if (!(io&GPIO_BTN_A)) i|=KC_BTN_A;
+	if (!(io&GPIO_BTN_B)) i|=KC_BTN_B;
 //	printf("%x\n", i);
 	return i;
 }
@@ -115,7 +131,6 @@ int ioJoyReadInput() {
 void ioPowerDown() {
 	vTaskDelay(20/portTICK_PERIOD_MS); //Allow video thread to finish write
 	printf("PowerDown: wait till power btn is released...\n");
-//	vid_close();
 	while(1) {
 		uint64_t io=((uint64_t)GPIO.in1.data<<32)|GPIO.in;
 		vTaskDelay(50/portTICK_PERIOD_MS);
@@ -130,29 +145,8 @@ void ioPowerDown() {
 #endif
 
 	esp_deep_sleep_enable_ext1_wakeup(GPIO_BTN_PWR, ESP_EXT1_WAKEUP_ANY_HIGH);
-//	esp_deep_sleep_enable_ext0_wakeup(GPIO_BTN_PWR_PIN, 1);
 //	esp_deep_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
 	esp_deep_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);
-/*
-	rtc_gpio_pulldown_en(GPIO_14VEN_PIN); //14V gen
-	rtc_gpio_hold_en(GPIO_14VEN_PIN);
-	rtc_gpio_pullup_en(GPIO_OLED_CS_PIN); //cs
-	
-	rtc_gpio_pullup_en(GPIO_OLED_CLK_PIN); //clk
-	rtc_gpio_pullup_en(22); //dc
-	rtc_gpio_pullup_en(GPIO_OLED_DAT_PIN); //dat
-	rtc_gpio_pullup_en(33); //reset
-*/
-
-//	REG_SET_BIT(GPIO_PIN_MUX_REG[GPIO_14VEN_PIN], FUN_PD);
-//	REG_SET_BIT(GPIO_PIN_MUX_REG[GPIO_OLED_CS_PIN], FUN_PU);
-//	REG_SET_BIT(GPIO_PIN_MUX_REG[GPIO_OLED_CLK_PIN], FUN_PU);
-//	REG_SET_BIT(GPIO_PIN_MUX_REG[GPIO_OLED_DAT_PIN], FUN_PU);
-
-	//Force digital pins to hold their state
-//	CLEAR_PERI_REG_MASK(RTC_CNTL_DIG_ISO_REG, RTC_CNTL_DG_PAD_FORCE_UNHOLD);
-//	  SET_PERI_REG_MASK(RTC_CNTL_DIG_ISO_REG, RTC_CNTL_DG_PAD_FORCE_HOLD);
-
 
 	printf("PowerDown: esp_deep_sleep_start.\n");
 	esp_deep_sleep_start();
@@ -195,7 +189,7 @@ void ioInit() {
 			.intr_type=GPIO_INTR_DISABLE,
 			.mode=GPIO_MODE_INPUT,
 			.pull_down_en=1,
-			.pin_bit_mask=GPIO_BTN_PWR
+			.pin_bit_mask=GPIO_BTN_PWR|GPIO_CHGSTDBY
 		}
 	};
 	//Connect all pins to GPIO matrix
@@ -248,11 +242,9 @@ void ioInit() {
 
 	//Enable 14V, un-reset OLED and initialize controller
 	WRITE_PERI_REG(GPIO_OUT_W1TC_REG, GPIO_14VEN);
-
 	vTaskDelay(20 / portTICK_PERIOD_MS);
 	WRITE_PERI_REG(GPIO_OUT1_W1TS_REG, (GPIO_OLED_RST)>>32);
 	vTaskDelay(20 / portTICK_PERIOD_MS);
-
 	ssd1331Init();
 }
 

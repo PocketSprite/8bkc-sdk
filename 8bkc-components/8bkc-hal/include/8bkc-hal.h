@@ -1,0 +1,45 @@
+#ifndef KC_HAL_H
+#define KC_HAL_H
+
+#define KC_BTN_RIGHT (1<<0)
+#define KC_BTN_LEFT (1<<1)
+#define KC_BTN_UP (1<<2)
+#define KC_BTN_DOWN (1<<3)
+#define KC_BTN_START (1<<4)
+#define KC_BTN_SELECT (1<<5)
+#define KC_BTN_A (1<<6)
+#define KC_BTN_B (1<<7)
+#define KC_BTN_POWER (1<<8)
+#define KC_BTN_POWER_LONG (1<<9)
+
+//Warning: must be the same as the IO_CHG_* defines in io.h
+#define KC_CHG_NOCHARGER 0
+#define KC_CHG_CHARGING 1
+#define KC_CHG_FULL 2
+
+#define KC_SCREEN_W 80
+#define KC_SCREEN_H 64
+
+
+int kchal_get_hw_ver();
+
+void kchal_init();
+
+uint32_t kchal_get_keys();
+
+void kchal_send_fb(void *fb);
+
+void kchal_sound_rate(int rate);
+
+void kchal_sound_push(uint8_t *buf, int len);
+
+void kchal_power_down();
+
+int kchal_get_chg_status();
+
+void kchal_set_volume(uint8_t new_volume);
+
+uint8_t kchal_get_volume();
+
+
+#endif
