@@ -164,7 +164,7 @@ static int appfsGetFirstPageFor(const char *filename) {
 	return -1;
 }
 
-static bool appfsFdValid(int fd) {
+bool appfsFdValid(int fd) {
 	if (fd<0 || fd>=APPFS_PAGES) return false;
 	if (appfsMeta[appfsActiveMeta].page[(int)fd].used!=APPFS_USE_DATA) return false;
 	if (appfsMeta[appfsActiveMeta].page[(int)fd].name[0]==0xff) return false;
@@ -181,6 +181,38 @@ appfs_handle_t appfsOpen(char *filename) {
 
 void appfsClose(appfs_handle_t handle) {
 	//Not needed in this implementation. Added for possible later use (concurrency?)
+}
+
+void appfsEntryInfo(appfs_handle_t fd, const char **name, int *size) {
+	if (name) *name=appfsMeta[appfsActiveMeta].page[fd].name;
+	if (size) *size=appfsMeta[appfsActiveMeta].page[fd].size;
+}
+
+appfs_handle_t appfsNextEntry(appfs_handle_t fd) {
+	if (fd==APPFS_INVALID_FD) {
+		fd=0;
+	} else {
+		fd++;
+	}
+
+	if (fd>=APPFS_PAGES || fd<0) return APPFS_INVALID_FD;
+
+	while (appfsMeta[appfsActiveMeta].page[fd].used!=APPFS_USE_DATA || appfsMeta[appfsActiveMeta].page[fd].name[0]==0xff) {
+		fd++;
+		if (fd>=APPFS_PAGES) return APPFS_INVALID_FD;
+	}
+
+	return fd;
+}
+
+size_t appfsGetFreeMem() {
+	size_t ret=0;
+	for (int i=0; i<APPFS_PAGES; i++) {
+		if (appfsMeta[appfsActiveMeta].page[i].used==APPFS_USE_FREE) {
+			ret+=APPFS_SECTOR_SZ;
+		}
+	}
+	return ret;
 }
 
 #ifdef BOOTLOADER_BUILD
@@ -244,7 +276,7 @@ esp_err_t appfsBlMapRegions(int fd, AppfsBlRegionToMap *regions, int noRegions) 
 			for (int cpu=0; cpu<2; cpu++) {
 				int e = cache_flash_mmu_set(cpu, 0, d, appfsPartOffset+((pages[p]+1)*APPFS_SECTOR_SZ), 64, 1);
 				if (e != 0) {
-					ESP_LOGE(TAG, "cache_flash_mmu_set failed for cpu %d: %d\n", cpu, e);
+					ESP_LOGE(TAG, "cache_flash_mmu_set failed for cpu %d: %d", cpu, e);
 					Cache_Read_Enable(0);
 					return ESP_ERR_NO_MEM;
 				}
@@ -269,7 +301,7 @@ void* appfsBlMmap(int fd) {
 		pages[pageCt++]=page;
 		page=appfsMeta[appfsActiveMeta].page[page].next;
 	} while (page!=0);
-	ESP_LOGI(TAG, "File %d has %d pages.\n", fd, pageCt);
+	ESP_LOGI(TAG, "File %d has %d pages.", fd, pageCt);
 	
 	if (pageCt>50) {
 		ESP_LOGE(TAG, "appfsBlMmap: file too big to mmap");
@@ -288,7 +320,7 @@ void* appfsBlMmap(int fd) {
 		int e = cache_flash_mmu_set(0, 0, MMU_BLOCK0_VADDR+(i*APPFS_SECTOR_SZ), 
 						appfsPartOffset+((pages[i]+1)*APPFS_SECTOR_SZ), 64, 1);
 		if (e != 0) {
-			ESP_LOGE(TAG, "cache_flash_mmu_set failed: %d\n", e);
+			ESP_LOGE(TAG, "cache_flash_mmu_set failed: %d", e);
 			Cache_Read_Enable(0);
 			return NULL;
 		}
@@ -459,7 +491,7 @@ esp_err_t appfsCreateFile(char *filename, size_t size, appfs_handle_t *handle) {
 
 	if (sizeLeft>0) {
 		//Eek! Can't allocate enough space!
-		ESP_LOGD(TAG, "Not enough free space!\n");
+		ESP_LOGD(TAG, "Not enough free space!");
 		return ESP_ERR_NO_MEM;
 	}
 
@@ -610,37 +642,6 @@ void appfsDump() {
 	}
 }
 
-void appfsEntryInfo(appfs_handle_t fd, const char **name, int *size) {
-	if (name) *name=appfsMeta[appfsActiveMeta].page[fd].name;
-	if (size) *size=appfsMeta[appfsActiveMeta].page[fd].size;
-}
-
-appfs_handle_t appfsNextEntry(appfs_handle_t fd) {
-	if (fd==APPFS_INVALID_FD) {
-		fd=0;
-	} else {
-		fd++;
-	}
-
-	if (fd>=APPFS_PAGES || fd<0) return APPFS_INVALID_FD;
-
-	while (appfsMeta[appfsActiveMeta].page[fd].used!=APPFS_USE_DATA || appfsMeta[appfsActiveMeta].page[fd].name[0]==0xff) {
-		fd++;
-		if (fd>=APPFS_PAGES) return APPFS_INVALID_FD;
-	}
-
-	return fd;
-}
-
-size_t appfsGetFreeMem() {
-	size_t ret=0;
-	for (int i=0; i<APPFS_PAGES; i++) {
-		if (appfsMeta[appfsActiveMeta].page[i].used==APPFS_USE_FREE) {
-			ret+=APPFS_SECTOR_SZ;
-		}
-	}
-	return ret;
-}
 
 
 #endif

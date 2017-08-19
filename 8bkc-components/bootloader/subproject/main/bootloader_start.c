@@ -261,13 +261,105 @@ static bool ota_select_valid(const esp_ota_select_entry_t *s)
  *  @inputs:        void
  */
 
+
+//Copied from kchal, which we don't want to link inhere.
+int kchal_get_new_app() {
+	uint32_t r=REG_READ(RTC_CNTL_STORE0_REG);
+	ESP_LOGI(TAG, "RTC store0 reg: %x", r);
+	if ((r&0xFF000000)!=0xA5000000) return -1;
+	return r&0xff;
+}
+
+void appfs_try_boot_fd(appfs_handle_t fd) {
+    esp_err_t err;
+	uint8_t *appBytes=appfsBlMmap(fd);
+
+	const esp_image_header_t *hdr=(const esp_image_header_t*)appBytes;
+	err=esp_image_verify_image_header(0, hdr, false);
+	if (err!=ESP_OK) goto err;
+	uint32_t entry_addr=hdr->entry_addr;
+
+	AppfsBlRegionToMap mapRegions[8];
+	int noMaps=0;
+	uint8_t *p=appBytes+sizeof(esp_image_header_t);
+	for (int i=0; i<hdr->segment_count; i++) {
+		esp_image_segment_header_t *shdr=(esp_image_segment_header_t*)p;
+		p+=sizeof(esp_image_segment_header_t);
+		if (esp_image_segaddr_should_load(shdr->load_addr)) {
+			ESP_LOGI(TAG, "Segment %d: load to %X size %X", i, shdr->load_addr, shdr->data_len);
+			memcpy((void*)shdr->load_addr, p, shdr->data_len);
+		} else if (esp_image_segaddr_should_map(shdr->load_addr)) {
+			mapRegions[noMaps].fileAddr=p-appBytes;
+			mapRegions[noMaps].mapAddr=shdr->load_addr;
+			mapRegions[noMaps].length=shdr->data_len;
+			noMaps++;
+			ESP_LOGI(TAG, "Segment %d: map to %X size %X", i, shdr->load_addr, shdr->data_len);
+		} else {
+			ESP_LOGI(TAG, "Segment %d: ignore (addr %X) size %X", i, shdr->load_addr, shdr->data_len);
+		}
+		int l=(shdr->data_len+3)&(~3);
+		p+=l;
+	}
+	appfsBlMunmap();
+
+	ESP_LOGI(TAG, "Disabling RNG early entropy source...");
+	bootloader_random_disable();
+
+	appfsBlMapRegions(fd, mapRegions, noMaps);
+	ESP_LOGD(TAG, "start: 0x%08x", entry_addr);
+	typedef void (*entry_t)(void);
+	entry_t entry = ((entry_t) entry_addr);
+	(*entry)();
+
+err:
+	appfsBlMunmap(); //unmap 
+	return;
+}
+
+#define CHOOSER_NAME "chooser.app"
+
+void try_boot_appfs(bootloader_state_t *bs) {
+    esp_err_t err;
+	if (bs->appfs.offset == 0) {
+		ESP_LOGE(TAG, "No appFs found");
+		return;
+	}
+
+	//We have an appfs
+	ESP_LOGI(TAG, "AppFs found");
+	err=appfsBlInit(bs->appfs.offset, bs->appfs.size);
+	if (err != ESP_OK) {
+		ESP_LOGE(TAG, "AppFs initialization failed");
+		appfsBlDeinit();
+		return;
+	}
+
+	//Grab app to boot from 
+	appfs_handle_t fd=kchal_get_new_app();
+	if (fd!=-1 && appfsFdValid(fd)) {
+		const char *name;
+		appfsEntryInfo(fd, &name, NULL);
+		ESP_LOGI(TAG, "Trying to boot %s as indicated by RTC mem...", name);
+		appfs_try_boot_fd(fd);
+		ESP_LOGE(TAG, "Booting %s failed! Falling back to chooser.", name);
+	}
+	//App in RTC wasn't bootable.
+	if (appfsExists(CHOOSER_NAME)) {
+		ESP_LOGI(TAG, "Found chooser.app in appfs. Starting.");
+		fd=appfsOpen(CHOOSER_NAME);
+		ESP_LOGE(TAG, "Couldn't start chooser.app! Falling back to partition app.");
+	} else {
+		ESP_LOGI(TAG, CHOOSER_NAME" not found; not booting into alternate chooser.");
+	}
+	appfsBlDeinit();
+}
+
 void bootloader_main()
 {
     clock_configure();
     uart_console_configure();
     wdt_reset_check();
     ESP_LOGI(TAG, "ESP-IDF %s 2nd stage bootloader", IDF_VER);
-    esp_err_t err;
     esp_image_header_t fhdr;
     bootloader_state_t bs;
     esp_rom_spiflash_result_t spiRet1,spiRet2;
@@ -316,62 +408,8 @@ void bootloader_main()
     }
 
     esp_partition_pos_t load_part_pos;
-    const char *appName="chooser.app";
 
-    if (bs.appfs.offset != 0) {
-        //We have an appfs
-        ESP_LOGI(TAG, "AppFs found");
-        err=appfsBlInit(bs.appfs.offset, bs.appfs.size);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "AppFs initialization failed");
-            return;
-        }
-        if (appfsExists(appName)) {
-            ESP_LOGI(TAG, "Found %s in appfs. Starting.", appName);
-            appfs_handle_t fd=appfsOpen(appName);
-            uint8_t *appBytes=appfsBlMmap(fd);
-
-            const esp_image_header_t *hdr=(const esp_image_header_t*)appBytes;
-            err=esp_image_verify_image_header(0, hdr, false);
-            if (err!=ESP_OK) return;
-            uint32_t entry_addr=hdr->entry_addr;
-
-            AppfsBlRegionToMap mapRegions[8];
-            int noMaps=0;
-            uint8_t *p=appBytes+sizeof(esp_image_header_t);
-            for (int i=0; i<hdr->segment_count; i++) {
-                esp_image_segment_header_t *shdr=(esp_image_segment_header_t*)p;
-                p+=sizeof(esp_image_segment_header_t);
-                if (esp_image_segaddr_should_load(shdr->load_addr)) {
-                    ESP_LOGI(TAG, "Segment %d: load to %X size %X", i, shdr->load_addr, shdr->data_len);
-                    memcpy((void*)shdr->load_addr, p, shdr->data_len);
-                } else if (esp_image_segaddr_should_map(shdr->load_addr)) {
-                    mapRegions[noMaps].fileAddr=p-appBytes;
-                    mapRegions[noMaps].mapAddr=shdr->load_addr;
-                    mapRegions[noMaps].length=shdr->data_len;
-                    noMaps++;
-                    ESP_LOGI(TAG, "Segment %d: map to %X size %X", i, shdr->load_addr, shdr->data_len);
-                } else {
-                    ESP_LOGI(TAG, "Segment %d: ignore (addr %X) size %X", i, shdr->load_addr, shdr->data_len);
-                }
-                int l=(shdr->data_len+3)&(~3);
-                p+=l;
-            }
-            appfsBlMunmap(); //unmap 
-
-            ESP_LOGI(TAG, "Disabling RNG early entropy source...");
-            bootloader_random_disable();
-
-            appfsBlMapRegions(fd, mapRegions, noMaps);
-            ESP_LOGD(TAG, "start: 0x%08x", entry_addr);
-            typedef void (*entry_t)(void);
-            entry_t entry = ((entry_t) entry_addr);
-            (*entry)();
-        } else {
-            ESP_LOGI(TAG, "Did not find %s in appfs. Starting default firmware.\n", appName);
-        }
-        appfsBlDeinit();
-    }
+    try_boot_appfs(&bs);
 
     if (bs.ota_info.offset != 0) {              // check if partition table has OTA info partition
         //ESP_LOGE("OTA info sector handling is not implemented");

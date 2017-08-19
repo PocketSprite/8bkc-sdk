@@ -5,7 +5,9 @@
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 #include "driver/i2s.h"
+#include "esp_deep_sleep.h"
 
+#include "soc/rtc_cntl_reg.h"
 #include "8bkc-hal.h"
 #include "io.h"
 #include "ssd1331.h"
@@ -164,3 +166,23 @@ void kchal_power_down() {
 int kchal_get_chg_status() {
 	return ioGetChgStatus();
 }
+
+void kchal_set_new_app(int fd) {
+	if (fd<0 || fd>255) {
+		REG_WRITE(RTC_CNTL_STORE0_REG, 0);
+	} else {
+		REG_WRITE(RTC_CNTL_STORE0_REG, 0xA5000000|fd);
+	}
+}
+
+int kchal_get_new_app() {
+	uint32_t r=REG_READ(RTC_CNTL_STORE0_REG);
+	if ((r&0xFF000000)!=0xA5000000) return -1;
+	return r&0xff;
+}
+
+void kchal_boot_into_new_app() {
+	esp_deep_sleep_enable_timer_wakeup(10);
+	esp_deep_sleep_start();
+}
+

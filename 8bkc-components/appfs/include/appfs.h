@@ -12,6 +12,7 @@ typedef int appfs_handle_t;
 
 esp_err_t appfsInit(int type, int subtype);
 int appfsExists(char *filename);
+bool appfsFdValid(int fd);
 appfs_handle_t appfsOpen(char *filename);
 void appfsClose(appfs_handle_t handle);
 esp_err_t appfsDeleteFile(char *filename);

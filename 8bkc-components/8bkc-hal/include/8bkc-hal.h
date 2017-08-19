@@ -41,5 +41,8 @@ void kchal_set_volume(uint8_t new_volume);
 
 uint8_t kchal_get_volume();
 
+void kchal_set_new_app(int fd);
+int kchal_get_new_app();
+void kchal_boot_into_new_app();
 
 #endif
