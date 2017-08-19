@@ -610,4 +610,37 @@ void appfsDump() {
 	}
 }
 
+void appfsEntryInfo(appfs_handle_t fd, const char **name, int *size) {
+	if (name) *name=appfsMeta[appfsActiveMeta].page[fd].name;
+	if (size) *size=appfsMeta[appfsActiveMeta].page[fd].size;
+}
+
+appfs_handle_t appfsNextEntry(appfs_handle_t fd) {
+	if (fd==APPFS_INVALID_FD) {
+		fd=0;
+	} else {
+		fd++;
+	}
+
+	if (fd>=APPFS_PAGES || fd<0) return APPFS_INVALID_FD;
+
+	while (appfsMeta[appfsActiveMeta].page[fd].used!=APPFS_USE_DATA || appfsMeta[appfsActiveMeta].page[fd].name[0]==0xff) {
+		fd++;
+		if (fd>=APPFS_PAGES) return APPFS_INVALID_FD;
+	}
+
+	return fd;
+}
+
+size_t appfsGetFreeMem() {
+	size_t ret=0;
+	for (int i=0; i<APPFS_PAGES; i++) {
+		if (appfsMeta[appfsActiveMeta].page[i].used==APPFS_USE_FREE) {
+			ret+=APPFS_SECTOR_SZ;
+		}
+	}
+	return ret;
+}
+
+
 #endif
