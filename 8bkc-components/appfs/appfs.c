@@ -544,9 +544,10 @@ esp_err_t appfsMmap(appfs_handle_t fd, size_t offset, size_t len, const void** o
 		return ESP_ERR_INVALID_SIZE;
 	}
 	int dataStartPage=(appfsPart->address/SPI_FLASH_MMU_PAGE_SIZE)+1;
-	while (offset > APPFS_SECTOR_SZ) {
+	while (offset >= APPFS_SECTOR_SZ) {
 		page=appfsMeta[appfsActiveMeta].page[page].next;
 		offset-=APPFS_SECTOR_SZ;
+		ESP_LOGD(TAG, "Skipping a page (to page %d), remaining offset 0x%X", page, offset);
 	}
 
 	int *pages=alloca(sizeof(int)*((len/APPFS_SECTOR_SZ)+1));
