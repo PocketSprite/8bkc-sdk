@@ -114,6 +114,16 @@ void kchal_send_fb(void *fb) {
 	xSemaphoreGive(oledMux);
 }
 
+void kchal_send_fb_partial(void *fb, int x, int y, int h, int w) {
+	if (w<=0 || h<=0) return;
+	if (x<0 || x+w>OLED_FAKE_W) return;
+	if (y<0 || y+h>OLED_FAKE_H) return;
+	xSemaphoreTake(oledMux, portMAX_DELAY);
+	ssd1331SendFB(fb, x+OLED_FAKE_XOFF, y+OLED_FAKE_YOFF, w, h);
+	xSemaphoreGive(oledMux);
+}
+
+
 void kchal_set_volume(uint8_t new_volume) {
 	volume=new_volume;
 }

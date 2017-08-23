@@ -30,6 +30,7 @@ void kchal_init();
 uint32_t kchal_get_keys();
 
 void kchal_send_fb(void *fb);
+void kchal_send_fb_partial(void *fb, int x, int y, int h, int w);
 
 void kchal_sound_start(int rate, int buffsize);
 
