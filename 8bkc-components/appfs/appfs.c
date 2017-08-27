@@ -569,6 +569,19 @@ esp_err_t appfsMmap(appfs_handle_t fd, size_t offset, size_t len, const void** o
 	return ESP_OK;
 }
 
+//Just mmaps and memcpys the data. Maybe not the fastest ever, but hey, if you want that you should mmap and handle
+//stuff yourself.
+esp_err_t appfsRead(appfs_handle_t fd, size_t start, void *buf, size_t len) {
+	void *flash;
+	spi_flash_mmap_handle_t handle;
+	esp_err_t r=appfsMmap(fd, start, len, &flash, SPI_FLASH_MMAP_DATA, &handle);
+	if (r!=ESP_OK) return r;
+	memcpy(buf, flash, len);
+	spi_flash_munmap(handle);
+	return ESP_OK;
+}
+
+
 esp_err_t appfsErase(appfs_handle_t fd, size_t start, size_t len) {
 	esp_err_t r;
 	int page=(int)fd;

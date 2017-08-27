@@ -82,7 +82,7 @@ void ioOledSend(char *data, int count, int dc) {
 	vbat+=adc1_get_voltage(VBAT_ADC_CHAN);
 	vbatCtr++;
 	if (vbatCtr==64) {
-		printf("Vbat: %d\n", vbat/64);
+//		printf("Vbat: %d\n", vbat/64);
 		vbat=0;
 		vbatCtr=0;
 	}

@@ -21,6 +21,7 @@ esp_err_t appfsMmap(appfs_handle_t fd, size_t offset, size_t len, const void** o
 									spi_flash_mmap_memory_t memory, spi_flash_mmap_handle_t* out_handle);
 esp_err_t appfsErase(appfs_handle_t fd, size_t start, size_t len);
 esp_err_t appfsWrite(appfs_handle_t fd, size_t start, uint8_t *buf, size_t len);
+esp_err_t appfsRead(appfs_handle_t fd, size_t start, void *buf, size_t len);
 void appfsDump();
 void appfsEntryInfo(appfs_handle_t fd, const char **name, int *size);
 appfs_handle_t appfsNextEntry(appfs_handle_t fd);
