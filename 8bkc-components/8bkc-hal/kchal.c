@@ -6,6 +6,8 @@
 #include "freertos/semphr.h"
 #include "driver/i2s.h"
 #include "esp_deep_sleep.h"
+#include "nvs.h"
+#include "nvs_flash.h"
 
 #include "soc/rtc_cntl_reg.h"
 #include "8bkc-hal.h"
@@ -14,6 +16,7 @@
 #include "appfs.h"
 
 SemaphoreHandle_t oledMux;
+SemaphoreHandle_t configMux;
 
 //The hardware size of the oled.
 #define OLED_REAL_H 64
@@ -32,9 +35,17 @@ SemaphoreHandle_t oledMux;
 #define OLED_LED_H 3
 #define OLED_LED_W 3
 
-static int volume=128;
+typedef struct {
+	uint8_t volume;
+	uint8_t contrast;
+} ConfVars;
+#define VOLUME_KEY "vol"
+#define CONTRAST_KEY "con"
+
+static ConfVars config, savedConfig;
 static QueueHandle_t soundQueue;
 static int soundRunning=0;
+static nvs_handle nvsHandle;
 
 int kchal_get_hw_ver() {
 	return 1;
@@ -49,6 +60,17 @@ static void setLed(int color) {
 	xSemaphoreGive(oledMux);
 }
 
+
+static void flushConfigToNvs() {
+	//Check if anything changed
+	if (memcmp(&config, &savedConfig, sizeof(config))==0) return;
+	if (config.volume!=savedConfig.volume) nvs_set_u8(nvsHandle, VOLUME_KEY, config.volume);
+	if (config.contrast!=savedConfig.contrast) nvs_set_u8(nvsHandle, CONTRAST_KEY, config.contrast);
+	//Okay, we're up to date again
+	memcpy(&savedConfig, &config, sizeof(config));
+	nvs_commit(nvsHandle);
+}
+
 /*
 Management thread. Handles charging indicator, extra-long presses.
 */
@@ -57,12 +79,13 @@ static void kchal_mgmt_task(void *arg) {
 	uint32_t keys;
 	int longCt=0;
 	int oldChgStatus=-1;
+	int checkConfCtr=0;
 	while(1) {
 		keys=kchal_get_keys();
 		//Check if powerdown is pressed > 5 sec. If so, hard powerdown.
 		if (keys & KC_BTN_POWER_LONG) {
 			longCt++;
-			if (longCt>6) ioPowerDown();
+			if (longCt>6) kchal_power_down();
 		} else {
 			longCt=0;
 		}
@@ -83,12 +106,19 @@ static void kchal_mgmt_task(void *arg) {
 				setLed(0x07E0);
 			}
 		}
+
+		checkConfCtr++;
+		if (checkConfCtr==6) {
+			checkConfCtr=0;
+			flushConfigToNvs();
+		}
 		vTaskDelay(500/portTICK_PERIOD_MS);
 	}
 }
 
 void kchal_init() {
 	oledMux=xSemaphoreCreateMutex();
+	configMux=xSemaphoreCreateMutex();
 	//Initialize IO
 	ioInit();
 	//Init appfs
@@ -101,7 +131,19 @@ void kchal_init() {
 	memset(fb, 0, OLED_REAL_H*OLED_REAL_W*2);
 	ssd1331SendFB(fb, 0, 0, OLED_REAL_W, OLED_REAL_H);
 	free(fb);
-	xTaskCreatePinnedToCore(&kchal_mgmt_task, "kchal", 1024, NULL, 5, NULL, 0);
+
+	//Grab relevant nvram variables
+	r=nvs_flash_init();
+	if (r!=ESP_OK) {
+		printf("Warning: NVS init failed!\n");
+	}
+
+	r=nvs_open("8bkc", NVS_READWRITE, &nvsHandle);
+	nvs_get_u8(nvsHandle, VOLUME_KEY, &config.volume);
+	nvs_get_u8(nvsHandle, CONTRAST_KEY, &config.contrast);
+	memcpy(&savedConfig, &config, sizeof(config));
+
+	xTaskCreatePinnedToCore(&kchal_mgmt_task, "kchal", 1024*4, NULL, 5, NULL, 0);
 }
 
 uint32_t kchal_get_keys() {
@@ -125,11 +167,26 @@ void kchal_send_fb_partial(void *fb, int x, int y, int h, int w) {
 
 
 void kchal_set_volume(uint8_t new_volume) {
-	volume=new_volume;
+	xSemaphoreTake(configMux, portMAX_DELAY);
+	config.volume=new_volume;
+	xSemaphoreGive(configMux);
 }
 
 uint8_t kchal_get_volume() {
-	return volume;
+	return config.volume;
+}
+
+void kchal_set_contrast(int contrast) {
+	xSemaphoreTake(oledMux, portMAX_DELAY);
+	ssd1331SetContrast(contrast);
+	xSemaphoreGive(oledMux);
+	xSemaphoreTake(configMux, portMAX_DELAY);
+	config.contrast=contrast;
+	xSemaphoreGive(configMux);
+}
+
+uint8_t kchal_get_contrast(int contrast) {
+	return config.contrast;
 }
 
 void kchal_sound_start(int rate, int buffsize) {
@@ -147,12 +204,6 @@ void kchal_sound_start(int rate, int buffsize) {
 	i2s_set_pin(0, NULL);
 	i2s_set_dac_mode(I2S_DAC_CHANNEL_LEFT_EN);
 	i2s_set_sample_rates(0, cfg.sample_rate);
-
-#if 0
-	//I2S enables *both* DAC channels; we only need DAC2. DAC1 is connected to the select button.
-	CLEAR_PERI_REG_MASK(RTC_IO_PAD_DAC1_REG, RTC_IO_PDAC1_DAC_XPD_FORCE_M);
-	CLEAR_PERI_REG_MASK(RTC_IO_PAD_DAC1_REG, RTC_IO_PDAC1_XPD_DAC_M);
-#endif
 	soundRunning=1;
 }
 
@@ -164,7 +215,7 @@ void kchal_sound_push(uint8_t *buf, int len) {
 		int plen=len-i;
 		if (plen>SND_CHUNKSZ) plen=SND_CHUNKSZ;
 		for (int j=0; j<plen; j++) {
-			int s=((((int)buf[i+j])-128)*volume); //Make [-128,127], multiply with volume
+			int s=((((int)buf[i+j])-128)*config.volume); //Make [-128,127], multiply with volume
 			s=(s>>8)+128; //divide off volume max, get back to [0-255]
 			if (s>255) s=255;
 			if (s<0) s=0;
@@ -175,8 +226,29 @@ void kchal_sound_push(uint8_t *buf, int len) {
 	}
 }
 
+void setPdownSquare(uint16_t *fb, int s) {
+	uint16_t col=kchal_fbval_rgb(s*4+8, s*4+8, s*4+8);
+	for (int x=s; x<=KC_SCREEN_W-s; x++) {
+		for (int y=s; y<=KC_SCREEN_H-s; y++) {
+			fb[x+y*KC_SCREEN_W]=col;
+		}
+	}
+}
+
 void kchal_power_down() {
-	void ioPowerDown();
+	uint16_t *tmpfb=malloc(KC_SCREEN_H*KC_SCREEN_W*2);
+	xSemaphoreTake(oledMux, 100/portTICK_PERIOD_MS);
+	if (tmpfb!=NULL) {
+		//Animate powerdown thing
+		for (int s=0; s<32; s++) {
+			memset(tmpfb, 0, KC_SCREEN_H*KC_SCREEN_W*2);
+			setPdownSquare(tmpfb, s);
+			ssd1331SendFB(tmpfb, OLED_FAKE_XOFF, OLED_FAKE_YOFF, OLED_FAKE_W, OLED_FAKE_H);
+			vTaskDelay(10/portTICK_PERIOD_MS);
+		}
+	}
+	ioOledPowerDown();
+	ioPowerDown();
 }
 
 int kchal_get_chg_status() {
@@ -198,10 +270,8 @@ int kchal_get_new_app() {
 }
 
 void kchal_boot_into_new_app() {
+	ioOledPowerDown();
 	esp_deep_sleep_enable_timer_wakeup(10);
 	esp_deep_sleep_start();
 }
 
-void kchal_set_contrast(int contrast) {
-	ssd1331SetContrast(contrast);
-}

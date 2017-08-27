@@ -21,5 +21,7 @@ int ioJoyReadInput();
 void ioInit();
 void ioPowerDown();
 int ioGetChgStatus();
+void ioOledPowerDown();
+
 
 #endif

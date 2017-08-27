@@ -7,6 +7,7 @@
 #include "soc/rtc_cntl_reg.h"
 #include "driver/rtc_io.h"
 #include "driver/gpio.h"
+#include "driver/adc.h"
 #include "driver/spi_master.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -30,29 +31,26 @@
 #define GPIO_BTN_PWR ((uint64_t)1<<GPIO_BTN_PWR_PIN)
 
 //OLED connections
-#define GPIO_OLED_CS_PIN 5
+#define GPIO_OLED_CS_PIN 33UL
+//#define GPIO_OLED_CS_PIN 5
 #define GPIO_OLED_CLK_PIN 18
 #define GPIO_OLED_DAT_PIN 23
 
-#define GPIO_OLED_RST ((uint64_t)1UL<<33UL)
-#define GPIO_OLED_CS (1<<GPIO_OLED_CS_PIN)
+//WARNING: Reset and /cs switched.
+//#define GPIO_OLED_RST ((uint64_t)1UL<<33UL)
+#define GPIO_OLED_RST ((uint64_t)1UL<<5UL)
+#define GPIO_OLED_CS ((uint64_t)1UL<<GPIO_OLED_CS_PIN)
 #define GPIO_OLED_CLK (1<<GPIO_OLED_CLK_PIN)
 #define GPIO_OLED_DC (1<<22)
 #define GPIO_OLED_DAT (1<<GPIO_OLED_DAT_PIN)
-
-//DAC for sound
-#define GPIO_PWMB 0
-#define GPIO_PWMA 0
 #define GPIO_DAC (1<<26)
 #define GPIO_CHGDET (1<<19) //battery is charging, low-active
 #define GPIO_CHGSTDBY ((uint64_t)1<<36)  //micro-usb plugged
 #define GPIO_VBAT ((uint64_t)1<<36)
-#define GPIO_14VEN_PIN 17
-#define GPIO_OLED_PWR ((1<<2)|(1<<13))
+#define GPIO_OLED_PWR (1<<2)
+#define GPIO_14VEN (1<<17) //High enables 14V generation for OLED (and audio amp)
 
-#define GPIO_14VEN (1<<GPIO_14VEN_PIN) //High enables 14V generation for OLED (and audio amp)
-
-
+#define VBAT_ADC_CHAN ADC1_CHANNEL_5
 
 
 #define OLED_SPI_NUM HSPI_HOST
@@ -70,6 +68,7 @@ static void oled_spi_pre_transfer_callback(spi_transaction_t *t) {
 void ioOledSend(char *data, int count, int dc) {
 	esp_err_t ret;
 	spi_transaction_t t;
+	static int vbat, vbatCtr=0;
 	if (count==0) return;             //no need to send anything
 	memset(&t, 0, sizeof(t));       //Zero out the transaction
 	t.length=count*8;                 //Len is in bytes, transaction length is in bits.
@@ -77,6 +76,17 @@ void ioOledSend(char *data, int count, int dc) {
 	t.user=(void*)dc;               //D/C info for callback
 	ret=spi_device_transmit(oled_spi_handle, &t);  //Transmit!
 	assert(ret==ESP_OK);            //Should have had no issues.
+
+	GPIO.func_out_sel_cfg[33].oen_inv_sel=1;
+	ets_delay_us(10);
+	vbat+=adc1_get_voltage(VBAT_ADC_CHAN);
+	vbatCtr++;
+	if (vbatCtr==64) {
+		printf("Vbat: %d\n", vbat/64);
+		vbat=0;
+		vbatCtr=0;
+	}
+	GPIO.func_out_sel_cfg[33].oen_inv_sel=0;
 }
 
 int ioGetChgStatus() {
@@ -125,22 +135,19 @@ int ioJoyReadInput() {
 	return i;
 }
 
-//Usually called from joybtn handler, so the emu should be 'stopped' already.
+void ioOledPowerDown() {
+	WRITE_PERI_REG(GPIO_OUT_W1TS_REG, GPIO_14VEN);
+	vTaskDelay(300/portTICK_PERIOD_MS);
+	ssd1331PowerDown();
+}
+
 void ioPowerDown() {
-	vTaskDelay(20/portTICK_PERIOD_MS); //Allow video thread to finish write
 	printf("PowerDown: wait till power btn is released...\n");
 	while(1) {
 		uint64_t io=((uint64_t)GPIO.in1.data<<32)|GPIO.in;
 		vTaskDelay(50/portTICK_PERIOD_MS);
 		if (!(io&GPIO_BTN_PWR)) break;
 	}
-	printf("PowerDown: Powering down.\n");
-	vTaskDelay(1000/portTICK_PERIOD_MS);
-#if (CONFIG_GBFEMTO_HW_VER == 0)
-	WRITE_PERI_REG(GPIO_OUT_W1TC_REG, GPIO_14VEN);
-#else
-	WRITE_PERI_REG(GPIO_OUT_W1TS_REG, GPIO_14VEN);
-#endif
 
 	esp_deep_sleep_enable_ext1_wakeup(GPIO_BTN_PWR, ESP_EXT1_WAKEUP_ANY_HIGH);
 //	esp_deep_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
@@ -221,11 +228,18 @@ void ioInit() {
 	}
 
 	//Start initializing OLED
-	WRITE_PERI_REG(GPIO_OUT_W1TC_REG, GPIO_OLED_PWR|GPIO_OLED_RST|GPIO_OLED_CS|GPIO_OLED_CLK|GPIO_OLED_DC|GPIO_OLED_DAT|GPIO_14VEN);
+	uint64_t pinsToClear=GPIO_OLED_PWR|GPIO_OLED_RST|GPIO_OLED_CS|GPIO_OLED_CLK|GPIO_OLED_DC|GPIO_OLED_DAT|GPIO_14VEN;
+	WRITE_PERI_REG(GPIO_OUT_W1TC_REG, pinsToClear);
+	WRITE_PERI_REG(GPIO_OUT1_W1TC_REG, (pinsToClear>>32UL));
 
 	gpio_matrix_out(23, VSPID_OUT_IDX,0,0);
 	gpio_matrix_out(18, VSPICLK_OUT_IDX,0,0);
 	gpio_matrix_out(5, VSPICS0_OUT_IDX,0,0);
+
+	//Initialize battery voltage ADC
+	//We double-use /CS as the voltage measurement pin.
+	adc1_config_width(ADC_WIDTH_12Bit);
+	adc1_config_channel_atten(VBAT_ADC_CHAN, ADC_ATTEN_0db);
 
 	//Initialize the SPI bus
 	ret=spi_bus_initialize(OLED_SPI_NUM, &buscfg, 1);

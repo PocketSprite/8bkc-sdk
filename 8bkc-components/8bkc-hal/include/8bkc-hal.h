@@ -44,9 +44,17 @@ void kchal_set_volume(uint8_t new_volume);
 
 uint8_t kchal_get_volume();
 
+void kchal_set_contrast(int contrast);
+
+uint8_t kchal_get_contrast();
+
 void kchal_set_new_app(int fd);
 int kchal_get_new_app();
 void kchal_boot_into_new_app();
 
-void kchal_set_contrast(int contrast);
+static inline uint16_t kchal_fbval_rgb(uint8_t r, uint8_t g, uint8_t b) {
+	uint16_t v=((r>>3)<<11)|((g>>2)<<5)|((b>>3)<<0);
+	return (v>>8)|((v&0xff)<<8);
+}
+
 #endif
