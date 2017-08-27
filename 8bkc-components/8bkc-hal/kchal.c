@@ -207,6 +207,10 @@ void kchal_sound_start(int rate, int buffsize) {
 	soundRunning=1;
 }
 
+void kchal_sound_stop() {
+	i2s_driver_uninstall(0);
+}
+
 #define SND_CHUNKSZ 32
 void kchal_sound_push(uint8_t *buf, int len) {
 	uint32_t tmpb[SND_CHUNKSZ];
@@ -225,6 +229,14 @@ void kchal_sound_push(uint8_t *buf, int len) {
 		i+=plen;
 	}
 }
+
+/*
+Powerdown does a small CRT-like animation: the screen collapses into a bright line which then fades out.
+The nice thing is that this actually serves a purpose and the fade out of the line is not in code: we need
+some pixels on to allow the 14V to collapse quickly, which is the purpose of the white line anyway. The white
+line does the fade out because the 14V line is cut while the display still displays the same thing: you 
+actually see the 14V decoupling caps emptying themselves over the LEDs.
+*/
 
 void setPdownSquare(uint16_t *fb, int s) {
 	uint16_t col=kchal_fbval_rgb(s*4+8, s*4+8, s*4+8);

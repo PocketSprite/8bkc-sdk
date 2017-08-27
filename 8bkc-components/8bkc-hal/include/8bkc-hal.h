@@ -36,6 +36,8 @@ void kchal_sound_start(int rate, int buffsize);
 
 void kchal_sound_push(uint8_t *buf, int len);
 
+void kchal_sound_stop();
+
 void kchal_power_down();
 
 int kchal_get_chg_status();

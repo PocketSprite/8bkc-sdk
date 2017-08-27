@@ -161,7 +161,7 @@ static int appfsGetFirstPageFor(const char *filename) {
 		}
 	}
 	//Nothing found.
-	return -1;
+	return APPFS_INVALID_FD;
 }
 
 bool appfsFdValid(int fd) {
