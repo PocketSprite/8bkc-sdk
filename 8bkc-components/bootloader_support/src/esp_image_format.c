@@ -47,8 +47,6 @@ static esp_err_t process_segment(int index, uint32_t flash_addr, esp_image_segme
 /* Verify the main image header */
 esp_err_t esp_image_verify_image_header(uint32_t src_addr, const esp_image_header_t *image, bool silent);
 
-/* Verify a segment header */
-static esp_err_t verify_segment_header(int index, const esp_image_segment_header_t *segment, uint32_t segment_data_offs, bool silent);
 
 /* Log-and-fail macro for use in esp_image_load */
 #define FAIL_LOAD(...) do {                         \
@@ -245,7 +243,7 @@ static esp_err_t process_segment(int index, uint32_t flash_addr, esp_image_segme
 
     ESP_LOGV(TAG, "segment data length 0x%x data starts 0x%x", data_len, data_addr);
 
-    err = verify_segment_header(index, header, data_addr, silent);
+    err = esp_image_verify_segment_header(index, header, data_addr, silent);
     if (err != ESP_OK) {
         return err;
     }
@@ -325,7 +323,7 @@ static esp_err_t process_segment(int index, uint32_t flash_addr, esp_image_segme
     return err;
 }
 
-static esp_err_t verify_segment_header(int index, const esp_image_segment_header_t *segment, uint32_t segment_data_offs, bool silent)
+esp_err_t esp_image_verify_segment_header(int index, const esp_image_segment_header_t *segment, uint32_t segment_data_offs, bool silent)
 {
     if ((segment->data_len & 3) != 0
         || segment->data_len >= SIXTEEN_MB) {

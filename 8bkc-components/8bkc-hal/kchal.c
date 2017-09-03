@@ -143,7 +143,8 @@ void kchal_init() {
 	nvs_get_u8(nvsHandle, CONTRAST_KEY, &config.contrast);
 	memcpy(&savedConfig, &config, sizeof(config));
 
-	xTaskCreatePinnedToCore(&kchal_mgmt_task, "kchal", 1024*4, NULL, 5, NULL, 0);
+	//Too little stack here leads to issues in the deep_sleep code... yeah.
+	xTaskCreatePinnedToCore(&kchal_mgmt_task, "kchal", 1024*16, NULL, 5, NULL, 0);
 }
 
 uint32_t kchal_get_keys() {

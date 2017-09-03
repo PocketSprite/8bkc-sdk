@@ -150,6 +150,9 @@ bool esp_image_segaddr_should_load(uint32_t load_addr);
 /* Return true if load_addr is an address the bootloader should map via flash cache */
 bool esp_image_segaddr_should_map(uint32_t load_addr);
 
+/* Verify a segment header */
+esp_err_t esp_image_verify_segment_header(int index, const esp_image_segment_header_t *segment, uint32_t segment_data_offs, bool silent);
+
 
 
 typedef struct {

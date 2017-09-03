@@ -148,6 +148,8 @@ void ioPowerDown() {
 		vTaskDelay(50/portTICK_PERIOD_MS);
 		if (!(io&GPIO_BTN_PWR)) break;
 	}
+	//debounce
+	vTaskDelay(200/portTICK_PERIOD_MS);
 
 	esp_deep_sleep_enable_ext1_wakeup(GPIO_BTN_PWR, ESP_EXT1_WAKEUP_ANY_HIGH);
 //	esp_deep_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);

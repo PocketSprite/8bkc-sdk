@@ -32,6 +32,8 @@
 #include "soc/soc.h"
 #include "soc/cpu.h"
 #include "soc/rtc.h"
+#include "soc/rtc_io_reg.h"
+#include "soc/gpio_struct.h"
 #include "soc/dport_reg.h"
 #include "soc/io_mux_reg.h"
 #include "soc/efuse_reg.h"
@@ -51,6 +53,8 @@
 
 #include "flash_qio_mode.h"
 #include "appfs.h"
+
+#include "soc/gpio_reg.h"
 
 /* until it's official */
 #define PART_SUBTYPE_DATA_APPFS 3
@@ -270,6 +274,7 @@ int kchal_get_new_app() {
 	return r&0xff;
 }
 
+
 void appfs_try_boot_fd(appfs_handle_t fd) {
     esp_err_t err;
 	uint8_t *appBytes=appfsBlMmap(fd);
@@ -277,14 +282,18 @@ void appfs_try_boot_fd(appfs_handle_t fd) {
 	const esp_image_header_t *hdr=(const esp_image_header_t*)appBytes;
 	err=esp_image_verify_image_header(0, hdr, false);
 	if (err!=ESP_OK) goto err;
+	
 	uint32_t entry_addr=hdr->entry_addr;
 
 	AppfsBlRegionToMap mapRegions[8];
 	int noMaps=0;
-	uint8_t *p=appBytes+sizeof(esp_image_header_t);
+	uint8_t *pstart=appBytes+sizeof(esp_image_header_t);
+	uint8_t *p=pstart;
 	for (int i=0; i<hdr->segment_count; i++) {
 		esp_image_segment_header_t *shdr=(esp_image_segment_header_t*)p;
 		p+=sizeof(esp_image_segment_header_t);
+		err=esp_image_verify_segment_header(i, shdr, (p-appBytes), false);
+		if (err!=ESP_OK) goto err;
 		if (esp_image_segaddr_should_load(shdr->load_addr)) {
 			ESP_LOGI(TAG, "Segment %d: load to %X size %X", i, shdr->load_addr, shdr->data_len);
 			memcpy((void*)shdr->load_addr, p, shdr->data_len);
@@ -300,6 +309,10 @@ void appfs_try_boot_fd(appfs_handle_t fd) {
 		int l=(shdr->data_len+3)&(~3);
 		p+=l;
 	}
+
+	//Note: We do not check the sha or checksum here; that takes pretty long and we assume the chooser 
+	//has some kind of verification mechanism itself.
+
 	appfsBlMunmap();
 
 	ESP_LOGI(TAG, "Disabling RNG early entropy source...");
@@ -318,8 +331,29 @@ err:
 
 #define CHOOSER_NAME "chooser.app"
 
+//If select+start+power is pressed, we do a reset. If power is released and the other two buttons are held,
+//we do an emergency reset into the firmware chooser, where the user can decide to nuke the AppFs and/or NVS.
+#define FORCE_FACTORY_BTN1 25
+#define FORCE_FACTORY_BTN2 27
+
+//Returns true if key combo indicates a recovery boot.
+int dontDoAppFs() {
+	SET_PERI_REG_MASK(RTC_IO_TOUCH_PAD7_REG,RTC_IO_TOUCH_PAD7_RUE_M); //Use RTC to set GPIO27 pullup
+	SET_PERI_REG_MASK(RTC_IO_PAD_DAC1_REG, RTC_IO_PDAC1_RUE_M); //Use RTC to set GPIO26 pullup
+	SET_PERI_REG_MASK(PERIPHS_IO_MUX_GPIO25_U, FUN_IE);
+	GPIO.enable_w1tc=(1<<FORCE_FACTORY_BTN1);
+	GPIO.enable_w1tc=(1<<FORCE_FACTORY_BTN2);
+	ets_delay_us(100);
+	return (!(GPIO.in&(1<<FORCE_FACTORY_BTN1)) && (!(GPIO.in&(1<<FORCE_FACTORY_BTN2))));
+}
+
 void try_boot_appfs(bootloader_state_t *bs) {
     esp_err_t err;
+	if (dontDoAppFs()) {
+		ESP_LOGE(TAG, "Button is pressed: ignoring appfs and falling back to factory fs");
+		return;
+	}
+
 	if (bs->appfs.offset == 0) {
 		ESP_LOGE(TAG, "No appFs found");
 		return;
@@ -334,8 +368,15 @@ void try_boot_appfs(bootloader_state_t *bs) {
 		return;
 	}
 
-	//Grab app to boot from 
-	appfs_handle_t fd=kchal_get_new_app();
+	//Grab app to boot from, but only if we rebooted because deep_sleep.
+	//Also check for WDT reset because that's what deep sleep does on a rev0 esp32...
+	appfs_handle_t fd=-1;
+	if (rtc_get_reset_reason(0) == DEEPSLEEP_RESET|| rtc_get_reset_reason(0) == TG0WDT_SYS_RESET) {
+		fd=kchal_get_new_app();
+	} else {
+		ESP_LOGI(TAG, "Reset seems involuntary. Not booting app in RTC memory.");
+	}
+	
 	if (fd!=-1 && appfsFdValid(fd)) {
 		const char *name;
 		appfsEntryInfo(fd, &name, NULL);
