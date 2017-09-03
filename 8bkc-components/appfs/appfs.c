@@ -171,7 +171,7 @@ bool appfsFdValid(int fd) {
 	return true;
 }
 
-int appfsExists(char *filename) {
+int appfsExists(const char *filename) {
 	return (appfsGetFirstPageFor(filename)==-1)?0:1;
 }
 
@@ -410,7 +410,7 @@ static esp_err_t writePageInfo(int newMeta, int page, AppfsPageInfo *pi) {
 
 
 //This essentially writes a new meta page without any references to the file indicated.
-esp_err_t appfsDeleteFile(char *filename) {
+esp_err_t appfsDeleteFile(const char *filename) {
 	esp_err_t r;
 	int next=-1;
 	int newMeta;
@@ -457,10 +457,43 @@ esp_err_t appfsDeleteFile(char *filename) {
 }
 
 
+//This essentially writes a new meta page with the name changed.
+esp_err_t appfsRename(const char *from, const char *to) {
+	esp_err_t r;
+	int newMeta;
+	AppfsHeader hdr;
+	AppfsPageInfo pi;
+	//See if we actually need to do something
+	if (!appfsExists(from)) return ESP_FAIL;
+	if (appfsExists(to)) return ESP_FAIL;
+	//Create a new management sector
+	newMeta=(appfsActiveMeta+1)%APPFS_META_CNT;
+	r=esp_partition_erase_range(appfsPart, newMeta*APPFS_META_SZ, APPFS_META_SZ);
+	if (r!=ESP_OK) return r;
+	//Prepare header
+	memcpy(&hdr, &appfsMeta[appfsActiveMeta].hdr, sizeof(hdr));
+	hdr.serial++;
+	hdr.crc32=0;
+	for (int j=0; j<APPFS_PAGES; j++) {
+		//Grab old page info from current meta sector
+		memcpy(&pi, &appfsMeta[appfsActiveMeta].page[j], sizeof(pi));
+		if (pi.used==APPFS_USE_DATA && strcmp(pi.name, from)==0) {
+			strncpy(pi.name, to, sizeof(pi.name));
+			pi.name[sizeof(pi.name)-1]=0;
+		}
+		r=writePageInfo(newMeta, j, &pi);
+		if (r!=ESP_OK) return r;
+	}
+	r=writeHdr(&hdr, newMeta);
+	appfsActiveMeta=newMeta;
+	return r;
+}
+
+
 //Allocate space for a new file. Will kill any existing files if needed.
 //Warning: may kill old file but not create new file if new file won't fit on fs, even with old file removed.
 //ToDo: in that case, fail before deleting file.
-esp_err_t appfsCreateFile(char *filename, size_t size, appfs_handle_t *handle) {
+esp_err_t appfsCreateFile(const char *filename, size_t size, appfs_handle_t *handle) {
 	esp_err_t r;
 	//If there are any references to this file, kill 'em.
 	appfsDeleteFile(filename);
@@ -569,10 +602,10 @@ esp_err_t appfsMmap(appfs_handle_t fd, size_t offset, size_t len, const void** o
 	return ESP_OK;
 }
 
-//Just mmaps and memcpys the data. Maybe not the fastest ever, but hey, if you want that you should mmap and handle
-//stuff yourself.
+//Just mmaps and memcpys the data. Maybe not the fastest ever, but hey, if you want that you should mmap 
+//and read from the flash cache memory area yourself.
 esp_err_t appfsRead(appfs_handle_t fd, size_t start, void *buf, size_t len) {
-	void *flash;
+	const void *flash;
 	spi_flash_mmap_handle_t handle;
 	esp_err_t r=appfsMmap(fd, start, len, &flash, SPI_FLASH_MMAP_DATA, &handle);
 	if (r!=ESP_OK) return r;
@@ -590,18 +623,23 @@ esp_err_t appfsErase(appfs_handle_t fd, size_t start, size_t len) {
 		return ESP_ERR_INVALID_SIZE;
 	}
 
-	while (start > APPFS_SECTOR_SZ) {
+	//Find initial page
+	while (start >= APPFS_SECTOR_SZ) {
 		page=appfsMeta[appfsActiveMeta].page[page].next;
 		start-=APPFS_SECTOR_SZ;
 	}
+	//Page now is the initial page. Start is the offset into the page we need to start at.
+
 	while (len>0) {
 		size_t size=len;
-		if (size>APPFS_SECTOR_SZ) size=APPFS_SECTOR_SZ;
-		ESP_LOGD(TAG, "Erasing page %d", page);
-		r=esp_partition_erase_range(appfsPart, (page+1)*APPFS_SECTOR_SZ, size);
+		//Make sure we do not go over a page boundary
+		if ((size+start)>APPFS_SECTOR_SZ) size=APPFS_SECTOR_SZ-start;
+		ESP_LOGD(TAG, "Erasing page %d offset 0x%X size 0x%X", page, start, size);
+		r=esp_partition_erase_range(appfsPart, (page+1)*APPFS_SECTOR_SZ+start, size);
 		if (r!=ESP_OK) return r;
 		page=appfsMeta[appfsActiveMeta].page[page].next;
 		len-=size;
+		start=0; //offset is not needed anymore
 	}
 	return ESP_OK;
 }

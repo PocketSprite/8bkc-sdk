@@ -11,17 +11,18 @@ typedef int appfs_handle_t;
 #define APPFS_INVALID_FD -1
 
 esp_err_t appfsInit(int type, int subtype);
-int appfsExists(char *filename);
+int appfsExists(const char *filename);
 bool appfsFdValid(int fd);
 appfs_handle_t appfsOpen(char *filename);
 void appfsClose(appfs_handle_t handle);
-esp_err_t appfsDeleteFile(char *filename);
-esp_err_t appfsCreateFile(char *filename, size_t size, appfs_handle_t *handle);
+esp_err_t appfsDeleteFile(const char *filename);
+esp_err_t appfsCreateFile(const char *filename, size_t size, appfs_handle_t *handle);
 esp_err_t appfsMmap(appfs_handle_t fd, size_t offset, size_t len, const void** out_ptr, 
 									spi_flash_mmap_memory_t memory, spi_flash_mmap_handle_t* out_handle);
 esp_err_t appfsErase(appfs_handle_t fd, size_t start, size_t len);
 esp_err_t appfsWrite(appfs_handle_t fd, size_t start, uint8_t *buf, size_t len);
 esp_err_t appfsRead(appfs_handle_t fd, size_t start, void *buf, size_t len);
+esp_err_t appfsRename(const char *from, const char *to);
 void appfsDump();
 void appfsEntryInfo(appfs_handle_t fd, const char **name, int *size);
 appfs_handle_t appfsNextEntry(appfs_handle_t fd);
