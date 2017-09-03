@@ -41,7 +41,7 @@ static int nextFdFileForGlob(int fd, const char *glob, const char **name) {
 	return APPFS_INVALID_FD;
 }
 
-int kcugui_filechooser(const char *glob, const char *desc, kcgui_filechooser_cb_t *cb, void *usrptr) {
+int kcugui_filechooser(char *glob, char *desc, kcgui_filechooser_cb_t cb, void *usrptr) {
 	int scpos=-1;
 	int curspos=0;
 	int oldkeys=0xffff; //so we do not detect keys that were pressed on entering this
@@ -111,6 +111,9 @@ int kcugui_filechooser(const char *glob, const char *desc, kcgui_filechooser_cb_
 			}
 			if (prKeys&KC_BTN_A) {
 				return selFd;
+			}
+			if (prKeys&(~(KC_BTN_UP|KC_BTN_DOWN|KC_BTN_A))) {
+				cb(prKeys, &glob, &desc, usrptr);
 			}
 			//ToDo: callback thing
 			
