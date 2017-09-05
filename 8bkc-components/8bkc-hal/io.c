@@ -234,9 +234,11 @@ void ioInit() {
 	WRITE_PERI_REG(GPIO_OUT_W1TC_REG, pinsToClear);
 	WRITE_PERI_REG(GPIO_OUT1_W1TC_REG, (pinsToClear>>32UL));
 
+/*
 	gpio_matrix_out(23, VSPID_OUT_IDX,0,0);
 	gpio_matrix_out(18, VSPICLK_OUT_IDX,0,0);
 	gpio_matrix_out(5, VSPICS0_OUT_IDX,0,0);
+*/
 
 	//Initialize battery voltage ADC
 	//We double-use /CS as the voltage measurement pin.
@@ -257,7 +259,8 @@ void ioInit() {
 	//Enable 14V, un-reset OLED and initialize controller
 	WRITE_PERI_REG(GPIO_OUT_W1TC_REG, GPIO_14VEN);
 	vTaskDelay(20 / portTICK_PERIOD_MS);
-	WRITE_PERI_REG(GPIO_OUT1_W1TS_REG, (GPIO_OLED_RST)>>32);
+//	WRITE_PERI_REG(GPIO_OUT1_W1TS_REG, (GPIO_OLED_RST)>>32);
+	WRITE_PERI_REG(GPIO_OUT_W1TS_REG, (GPIO_OLED_RST));
 	vTaskDelay(20 / portTICK_PERIOD_MS);
 	ssd1331Init();
 }
