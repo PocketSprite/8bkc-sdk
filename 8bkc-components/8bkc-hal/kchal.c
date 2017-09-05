@@ -137,11 +137,14 @@ void kchal_init() {
 	if (r!=ESP_OK) {
 		printf("Warning: NVS init failed!\n");
 	}
+	printf("NVS inited\n");
 
 	r=nvs_open("8bkc", NVS_READWRITE, &nvsHandle);
-	nvs_get_u8(nvsHandle, VOLUME_KEY, &config.volume);
-	nvs_get_u8(nvsHandle, CONTRAST_KEY, &config.contrast);
-	memcpy(&savedConfig, &config, sizeof(config));
+	if (r==ESP_OK) {
+		nvs_get_u8(nvsHandle, VOLUME_KEY, &config.volume);
+		nvs_get_u8(nvsHandle, CONTRAST_KEY, &config.contrast);
+		memcpy(&savedConfig, &config, sizeof(config));
+	}
 
 	//Too little stack here leads to issues in the deep_sleep code... yeah.
 	xTaskCreatePinnedToCore(&kchal_mgmt_task, "kchal", 1024*16, NULL, 5, NULL, 0);
