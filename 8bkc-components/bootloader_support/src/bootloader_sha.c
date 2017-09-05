@@ -164,3 +164,4 @@ void bootloader_sha256_finish(bootloader_sha256_handle_t handle, uint8_t *digest
 }
 
 #endif
+

@@ -337,7 +337,7 @@ err:
 #define FORCE_FACTORY_BTN2 27
 
 //Returns true if key combo indicates a recovery boot.
-int dontDoAppFs() {
+int is_recovery_boot() {
 	SET_PERI_REG_MASK(RTC_IO_TOUCH_PAD7_REG,RTC_IO_TOUCH_PAD7_RUE_M); //Use RTC to set GPIO27 pullup
 	SET_PERI_REG_MASK(RTC_IO_PAD_DAC1_REG, RTC_IO_PDAC1_RUE_M); //Use RTC to set GPIO26 pullup
 	SET_PERI_REG_MASK(PERIPHS_IO_MUX_GPIO25_U, FUN_IE);
@@ -349,7 +349,7 @@ int dontDoAppFs() {
 
 void try_boot_appfs(bootloader_state_t *bs) {
     esp_err_t err;
-	if (dontDoAppFs()) {
+	if (is_recovery_boot()) {
 		ESP_LOGE(TAG, "Button is pressed: ignoring appfs and falling back to factory fs");
 		return;
 	}
@@ -432,6 +432,9 @@ void bootloader_main()
 #if CONFIG_FLASHMODE_QIO || CONFIG_FLASHMODE_QOUT
     bootloader_enable_qio_mode();
 #endif
+	if (!is_recovery_boot()) {
+		bootloader_write_protect_blocks();
+	}
 
     if (bootloader_flash_read(ESP_BOOTLOADER_OFFSET, &fhdr,
                               sizeof(esp_image_header_t), true) != ESP_OK) {

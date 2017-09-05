@@ -24,6 +24,8 @@ extern "C" {
  */
 void bootloader_enable_qio_mode(void);
 
+void bootloader_write_protect_blocks();
+
 #ifdef __cplusplus
 }
 #endif

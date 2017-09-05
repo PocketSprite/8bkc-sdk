@@ -251,6 +251,8 @@ static void write_status_16b_wrsr(unsigned new_status)
     execute_flash_command(CMD_WRSR, new_status, 16, 0);
 }
 
+
+
 static uint32_t execute_flash_command(uint8_t command, uint32_t mosi_data, uint8_t mosi_len, uint8_t miso_len)
 {
     SPIFLASH.user2.usr_command_value = command;
@@ -276,4 +278,48 @@ static uint32_t execute_flash_command(uint8_t command, uint32_t mosi_data, uint8
     { }
 
     return SPIFLASH.data_buf[0];
+}
+
+
+#define CMD_WEN_SR 0x6
+#define CMD_WEN_VOL_SR 0x50
+#define CMD_READ_SR1 0x5
+#define CMD_WRITE_SR1 0x1
+#define CMD_READ_SR2 0x35
+#define CMD_WRITE_SR2 0x31
+#define CMD_READ_SR3 0x15
+#define CMD_WRITE_SR3 0x11
+
+#define S1_SRP0 (1<<7)
+#define S1_SEC (1<<6)
+#define S1_TB (1<<5)
+#define S1_BP2 (1<<4)
+#define S1_BP1 (1<<3)
+#define S1_BP0 (1<<2)
+#define S1_WEL (1<<1)
+#define S1_BUSY (1<<0)
+
+#define S2_SUS (1<<7)
+#define S2_CMP (1<<6)
+#define S2_LB3 (1<<5)
+#define S2_LB2 (1<<4)
+#define S2_LB1 (1<<3)
+#define S2_QE (1<<1)
+#define S2_SRP1 (1<<0)
+
+#define S3_HOLDRST (1<<7)
+#define S3_DRV1 (1<<6)
+#define S3_DRV0 (1<<5)
+#define S3_WPS (1<<2)
+
+//Protects the first 256K bytes until power-off
+void bootloader_write_protect_blocks() {
+    esp_rom_spiflash_wait_idle(&g_rom_flashchip);
+	execute_flash_command(CMD_WEN_VOL_SR, 0, 0, 0);
+	execute_flash_command(CMD_WRITE_SR3, S3_DRV1|S3_DRV0, 8, 0);
+	execute_flash_command(CMD_WEN_VOL_SR, 0, 0, 0);
+	execute_flash_command(CMD_WRITE_SR1, S1_TB|S1_BP0, 8, 0);
+    uint8_t status = execute_flash_command(CMD_RDSR, 0, 0, 8)>>8;
+	execute_flash_command(CMD_WEN_VOL_SR, 0, 0, 0);
+	execute_flash_command(CMD_WRITE_SR2, (status&S2_QE)|S2_SRP1, 8, 0);
 }
