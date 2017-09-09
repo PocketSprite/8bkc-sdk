@@ -222,15 +222,22 @@ bool load_partition_table(bootloader_state_t* bs)
             case PART_SUBTYPE_DATA_WIFI:
                 partition_usage = "WiFi data";
                 break;
-            case PART_SUBTYPE_DATA_APPFS:
-                partition_usage = "AppFs";
-                bs->appfs = partition->pos;
-                break;
             default:
                 partition_usage = "Unknown data";
                 break;
             }
             break; /* PARTITION_USAGE_DATA */
+        case APPFS_PART_TYPE: /* appfs partition */
+            switch(partition->subtype) {
+            case APPFS_PART_SUBTYPE:
+                partition_usage = "AppFs";
+                bs->appfs = partition->pos;
+                break;
+            default:
+                partition_usage = "Unknown appfs";
+                break;
+            }
+            break; /* APPFS_PART_SUBTYPE */
         default: /* other partition type */
             break;
         }

@@ -41,6 +41,8 @@ static const char *TAG = "qio_mode";
 typedef unsigned (*read_status_fn_t)();
 typedef void (*write_status_fn_t)(unsigned);
 
+typedef void (*protect_fn_t)();
+
 typedef struct __attribute__((packed)) {
     const char *manufacturer;
     uint8_t mfg_id; /* 8-bit JEDEC manufacturer ID */
@@ -48,6 +50,7 @@ typedef struct __attribute__((packed)) {
     uint16_t id_mask; /* Bits to match on in flash chip ID */
     read_status_fn_t read_status_fn;
     write_status_fn_t write_status_fn;
+	protect_fn_t protect_fn;
     uint8_t status_qio_bit;
 } qio_info_t;
 
@@ -71,6 +74,11 @@ static void write_status_16b_wrsr(unsigned new_status);
 #define CONFIG_BOOTLOADER_SPI_WP_PIN ESP32_D2WD_WP_GPIO
 #endif
 
+void bootloader_write_protect_blocks_wd();
+void bootloader_write_protect_blocks_gd();
+
+
+
 /* Array of known flash chips and data to enable Quad I/O mode
 
    Manufacturer & flash ID can be tested by running "esptool.py
@@ -85,9 +93,9 @@ static void write_status_16b_wrsr(unsigned new_status);
  */
 const static qio_info_t chip_data[] = {
 /*   Manufacturer,   mfg_id, flash_id, id mask, Read Status,                Write Status,          QIE Bit */
-    { "MXIC",        0xC2,   0x2000, 0xFF00,    read_status_8b_rdsr,        write_status_8b_wrsr,  6 },
-    { "ISSI",        0x9D,   0x4000, 0xCF00,    read_status_8b_rdsr,        write_status_8b_wrsr,  6 }, /* IDs 0x40xx, 0x70xx */
-    { "WinBond",     0xEF,   0x4000, 0xFF00,    read_status_16b_rdsr_rdsr2, write_status_16b_wrsr, 9 },
+    { "MXIC",        0xC2,   0x2000, 0xFF00,    read_status_8b_rdsr,        write_status_8b_wrsr, NULL,  6 },
+    { "ISSI",        0x9D,   0x4000, 0xCF00,    read_status_8b_rdsr,        write_status_8b_wrsr, NULL,  6 }, /* IDs 0x40xx, 0x70xx */
+    { "WinBond",     0xEF,   0x4000, 0xFF00,    read_status_16b_rdsr_rdsr2, write_status_16b_wrsr, bootloader_write_protect_blocks_wd, 9 },
 
     /* Final entry is default entry, if no other IDs have matched.
 
@@ -95,7 +103,7 @@ const static qio_info_t chip_data[] = {
        GigaDevice (mfg ID 0xC8, flash IDs including 4016),
        FM25Q32 (QOUT mode only, mfg ID 0xA1, flash IDs including 4016)
     */
-    { NULL,          0xFF,    0xFFFF, 0xFFFF,   read_status_8b_rdsr2,       write_status_8b_wrsr2, 1 },
+    { NULL,          0xFF,    0xFFFF, 0xFFFF,   read_status_8b_rdsr2,       write_status_8b_wrsr2, bootloader_write_protect_blocks_gd, 1 },
 };
 
 #define NUM_CHIPS (sizeof(chip_data) / sizeof(qio_info_t))
@@ -312,14 +320,146 @@ static uint32_t execute_flash_command(uint8_t command, uint32_t mosi_data, uint8
 #define S3_DRV0 (1<<5)
 #define S3_WPS (1<<2)
 
-//Protects the first 256K bytes until power-off
 void bootloader_write_protect_blocks() {
+    uint32_t old_ctrl_reg;
+    uint32_t raw_flash_id;
+    uint8_t mfg_id;
+    uint16_t flash_id;
+    int i;
+
+    ESP_LOGD(TAG, "Probing for QIO mode enable...");
     esp_rom_spiflash_wait_idle(&g_rom_flashchip);
-	execute_flash_command(CMD_WEN_VOL_SR, 0, 0, 0);
-	execute_flash_command(CMD_WRITE_SR3, S3_DRV1|S3_DRV0, 8, 0);
-	execute_flash_command(CMD_WEN_VOL_SR, 0, 0, 0);
-	execute_flash_command(CMD_WRITE_SR1, S1_TB|S1_BP0, 8, 0);
-    uint8_t status = execute_flash_command(CMD_RDSR, 0, 0, 8)>>8;
-	execute_flash_command(CMD_WEN_VOL_SR, 0, 0, 0);
-	execute_flash_command(CMD_WRITE_SR2, (status&S2_QE)|S2_SRP1, 8, 0);
+
+    /* Set up some of the SPIFLASH user/ctrl variables which don't change
+       while we're probing using execute_flash_command() */
+    old_ctrl_reg = SPIFLASH.ctrl.val;
+    SPIFLASH.ctrl.val = SPI_WP_REG; // keep WP high while idle, otherwise leave DIO mode
+    SPIFLASH.user.usr_dummy = 0;
+    SPIFLASH.user.usr_addr = 0;
+    SPIFLASH.user.usr_command = 1;
+    SPIFLASH.user2.usr_command_bitlen = 7;
+
+    raw_flash_id = execute_flash_command(CMD_RDID, 0, 0, 24);
+    mfg_id = raw_flash_id & 0xFF;
+    flash_id = (raw_flash_id >> 16) | (raw_flash_id & 0xFF00);
+
+    const qio_info_t *chip;
+    for (i = 0; i < NUM_CHIPS-1; i++) {
+        chip = &chip_data[i];
+        if (mfg_id == chip->mfg_id && (flash_id & chip->id_mask) == (chip->flash_id & chip->id_mask)) {
+            break;
+        }
+    }
+
+	if (chip->protect_fn) {
+		chip->protect_fn();
+	} else {
+	    ESP_LOGD(TAG, "...Can't partially write protect this chip because I don't know how!");
+	}
+    esp_rom_spiflash_wait_idle(&g_rom_flashchip);
+    SPIFLASH.ctrl.val = old_ctrl_reg;
 }
+
+#define WB_CMD_WEN_SR 0x6
+#define WB_CMD_WEN_VOL_SR 0x50
+#define WB_CMD_READ_SR1 0x5
+#define WB_CMD_WRITE_SR1 0x1
+#define WB_CMD_READ_SR2 0x35
+#define WB_CMD_WRITE_SR2 0x31
+#define WB_CMD_READ_SR3 0x15
+#define WB_CMD_WRITE_SR3 0x11
+
+#define WB_S1_SRP0 (1<<7)
+#define WB_S1_SEC (1<<6)
+#define WB_S1_TB (1<<5)
+#define WB_S1_BP2 (1<<4)
+#define WB_S1_BP1 (1<<3)
+#define WB_S1_BP0 (1<<2)
+#define WB_S1_WEL (1<<1)
+#define WB_S1_BUSY (1<<0)
+
+#define WB_S2_SUS (1<<7)
+#define WB_S2_CMP (1<<6)
+#define WB_S2_LB3 (1<<5)
+#define WB_S2_LB2 (1<<4)
+#define WB_S2_LB1 (1<<3)
+#define WB_S2_QE (1<<1)
+#define WB_S2_SRP1 (1<<0)
+
+#define WB_S3_HOLDRST (1<<7)
+#define WB_S3_DRV1 (1<<6)
+#define WB_S3_DRV0 (1<<5)
+#define WB_S3_WPS (1<<2)
+
+
+void bootloader_write_protect_blocks_wd() {
+	execute_flash_command(WB_CMD_WEN_VOL_SR, 0, 0, 0);
+	execute_flash_command(WB_CMD_WRITE_SR3, WB_S3_DRV1|WB_S3_DRV0, 8, 0);
+    esp_rom_spiflash_wait_idle(&g_rom_flashchip);
+	execute_flash_command(WB_CMD_WEN_VOL_SR, 0, 0, 0);
+	execute_flash_command(WB_CMD_WRITE_SR1, WB_S1_TB|WB_S1_BP0, 8, 0);
+    esp_rom_spiflash_wait_idle(&g_rom_flashchip);
+    uint8_t status = execute_flash_command(WB_CMD_READ_SR2, 0, 0, 8);
+	execute_flash_command(WB_CMD_WEN_VOL_SR, 0, 0, 0);
+	execute_flash_command(WB_CMD_WRITE_SR2, (status&WB_S2_QE)|WB_S2_SRP1, 8, 0);
+    esp_rom_spiflash_wait_idle(&g_rom_flashchip);
+
+    uint8_t status1 = execute_flash_command(WB_CMD_READ_SR3, 0, 0, 8);
+    uint8_t status2 = execute_flash_command(WB_CMD_READ_SR2, 0, 0, 8);
+    uint8_t status3 = execute_flash_command(WB_CMD_READ_SR1, 0, 0, 8);
+	ESP_LOGI(TAG, "After protection: Sr3:2:1 is %02X:%02X:%02X", status3, status2, status1);
+}
+
+#define GD_CMD_WEN_SR 0x6
+#define GD_CMD_WEN_VOL_SR 0x50
+#define GD_CMD_READ_SR1 0x5
+#define GD_CMD_WRITE_SR1 0x1
+#define GD_CMD_READ_SR2 0x35
+#define GD_CMD_WRITE_SR2 0x31
+#define GD_CMD_READ_SR3 0x15
+#define GD_CMD_WRITE_SR3 0x11
+
+#define GD_S1_SRP0 (1<<7)
+#define GD_S1_BP4 (1<<6)
+#define GD_S1_BP3 (1<<5)
+#define GD_S1_BP2 (1<<4)
+#define GD_S1_BP1 (1<<3)
+#define GD_S1_BP0 (1<<2)
+#define GD_S1_WEL (1<<1)
+#define GD_S1_WIP (1<<0)
+
+#define GD_S2_SUS1 (1<<7)
+#define GD_S2_CMP (1<<6)
+#define GD_S2_LB3 (1<<5)
+#define GD_S2_LB2 (1<<4)
+#define GD_S2_LB1 (1<<3)
+#define GD_S2_SUS2 (1<<2)
+#define GD_S2_QE (1<<1)
+#define GD_S2_SRP1 (1<<0)
+
+#define GD_S3_HOLDRST (1<<7)
+#define GD_S3_DRV1 (1<<6)
+#define GD_S3_DRV0 (1<<5)
+#define GD_S3_LPE (1<<2)
+
+
+void bootloader_write_protect_blocks_gd() {
+	execute_flash_command(GD_CMD_WEN_VOL_SR, 0, 0, 0);
+	execute_flash_command(GD_CMD_WRITE_SR3, GD_S3_DRV1, 8, 0);
+    esp_rom_spiflash_wait_idle(&g_rom_flashchip);
+	execute_flash_command(GD_CMD_WEN_VOL_SR, 0, 0, 0);
+	execute_flash_command(GD_CMD_WRITE_SR1, GD_S1_BP3|GD_S1_BP1, 8, 0);
+    esp_rom_spiflash_wait_idle(&g_rom_flashchip);
+    uint8_t status = execute_flash_command(GD_CMD_READ_SR2, 0, 0, 8);
+	ESP_LOGI(TAG, "Sr2 is %x", status);
+	execute_flash_command(GD_CMD_WEN_VOL_SR, 0, 0, 0);
+	execute_flash_command(GD_CMD_WRITE_SR2, (status&GD_S2_QE)|GD_S2_SRP1, 8, 0);
+    esp_rom_spiflash_wait_idle(&g_rom_flashchip);
+
+    uint8_t status1 = execute_flash_command(GD_CMD_READ_SR3, 0, 0, 8);
+    uint8_t status2 = execute_flash_command(GD_CMD_READ_SR2, 0, 0, 8);
+    uint8_t status3 = execute_flash_command(GD_CMD_READ_SR1, 0, 0, 8);
+	ESP_LOGI(TAG, "After protection: Sr3:2:1 is %02X:%02X:%02X", status3, status2, status1);
+
+}
+
