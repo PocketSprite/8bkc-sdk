@@ -41,7 +41,7 @@ static int nextFdFileForGlob(int fd, const char *glob, const char **name) {
 	return APPFS_INVALID_FD;
 }
 
-int kcugui_filechooser(char *glob, char *desc, kcgui_filechooser_cb_t cb, void *usrptr) {
+int kcugui_filechooser(char *glob, char *desc, kcugui_filechooser_cb_t cb, void *usrptr) {
 	int scpos=-1;
 	int curspos=0;
 	int oldkeys=0xffff; //so we do not detect keys that were pressed on entering this
@@ -113,7 +113,7 @@ int kcugui_filechooser(char *glob, char *desc, kcgui_filechooser_cb_t cb, void *
 				return selFd;
 			}
 			if (prKeys&(~(KC_BTN_UP|KC_BTN_DOWN|KC_BTN_A))) {
-				cb(prKeys, &glob, &desc, usrptr);
+				if (cb) cb(prKeys, &glob, &desc, usrptr);
 			}
 			//ToDo: callback thing
 			
@@ -123,3 +123,73 @@ int kcugui_filechooser(char *glob, char *desc, kcgui_filechooser_cb_t cb, void *
 	}
 }
 
+int kcugui_menu(kcugui_menuitem_t *menu, char *desc, kcugui_menu_cb_t cb, void *usrptr) {
+	int scpos=-1;
+	int curspos=0;
+	int oldkeys=0xffff; //so we do not detect keys that were pressed on entering this
+	int endpos=9999;
+	while(1) {
+		kcugui_cls();
+		UG_FontSelect(&FONT_6X8);
+		UG_SetForecolor(C_YELLOW);
+		UG_PutString(0, 0, desc);
+		
+		int p=0;
+		
+		//Skip invisible entries.
+		while (p!=((scpos<0)?0:scpos) && (menu[p].flags&KCUGUI_MENUITEM_LAST)==0) p++;
+		
+		if ((menu[p].flags&KCUGUI_MENUITEM_LAST) && p==0) {
+			UG_SetForecolor(C_RED);
+			UG_PutString(0, 32, "*NO ITEMS*");
+		} else {
+			UG_SetForecolor(C_WHITE);
+			for (int y=(scpos<0)?-scpos:0; y<6; y++) {
+				if (menu[p].flags&KCUGUI_MENUITEM_LAST) {
+					endpos=p-1;
+					break;
+				}
+				if (p==curspos) {
+					UG_SetForecolor(C_WHITE);
+				} else {
+					UG_SetForecolor(C_BLUE);
+				}
+				//stop name from wrapping around
+				char truncnm[12];
+				strncpy(truncnm, menu[p].name, 11);
+				truncnm[11]=0;
+				//show
+				UG_PutString(0, 12+8*y, truncnm);
+				p++;
+			}
+		}
+		kcugui_flush();
+
+		int prKeys;
+		do {
+			int keys=kchal_get_keys();
+			//Filter out keys that are just pressed
+			prKeys=(keys^oldkeys)&keys;
+			if (prKeys&KC_BTN_UP) {
+				curspos--;
+				if (curspos<0) curspos=0;
+				if (scpos>(curspos-1)) scpos--;
+			}
+			if (prKeys&KC_BTN_DOWN) {
+				curspos++;
+				if (curspos>endpos) curspos--;
+				if (curspos>(scpos+4)) scpos++;
+			}
+			if (prKeys&KC_BTN_A) {
+				return curspos;
+			}
+			if (prKeys&(~(KC_BTN_UP|KC_BTN_DOWN|KC_BTN_A))) {
+				if (cb) cb(prKeys, &desc, &menu, curspos, usrptr);
+			}
+			//ToDo: callback thing
+			
+			oldkeys=keys;
+			vTaskDelay(50/portTICK_PERIOD_MS);
+		} while (prKeys==0);
+	}
+}
