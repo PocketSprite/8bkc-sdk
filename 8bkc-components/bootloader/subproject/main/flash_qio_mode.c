@@ -343,7 +343,7 @@ void bootloader_write_protect_blocks() {
     mfg_id = raw_flash_id & 0xFF;
     flash_id = (raw_flash_id >> 16) | (raw_flash_id & 0xFF00);
 
-    const qio_info_t *chip;
+    const qio_info_t *chip=NULL;
     for (i = 0; i < NUM_CHIPS-1; i++) {
         chip = &chip_data[i];
         if (mfg_id == chip->mfg_id && (flash_id & chip->id_mask) == (chip->flash_id & chip->id_mask)) {
@@ -351,7 +351,7 @@ void bootloader_write_protect_blocks() {
         }
     }
 
-	if (chip->protect_fn) {
+	if (chip && chip->protect_fn) {
 		chip->protect_fn();
 	} else {
 	    ESP_LOGD(TAG, "...Can't partially write protect this chip because I don't know how!");

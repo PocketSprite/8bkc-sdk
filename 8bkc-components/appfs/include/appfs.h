@@ -6,6 +6,9 @@
 #include "esp_spi_flash.h"
 
 
+#define APPFS_PART_TYPE 0x43
+#define APPFS_PART_SUBTYPE 0x3
+
 typedef int appfs_handle_t;
 
 #define APPFS_INVALID_FD -1

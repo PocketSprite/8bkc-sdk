@@ -22,6 +22,7 @@ void ioInit();
 void ioPowerDown();
 int ioGetChgStatus();
 void ioOledPowerDown();
-
+int ioGetVbatAdcVal();
+void ioVbatForceMeasure();
 
 #endif

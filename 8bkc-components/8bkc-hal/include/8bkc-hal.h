@@ -26,6 +26,8 @@
 int kchal_get_hw_ver();
 
 void kchal_init();
+void kchal_init_hw();
+void kchal_init_sdk();
 
 uint32_t kchal_get_keys();
 
@@ -54,9 +56,19 @@ void kchal_set_new_app(int fd);
 int kchal_get_new_app();
 void kchal_boot_into_new_app();
 
+int kchal_get_bat_mv();
+int kchal_get_bat_pct();
+void kchal_cal_adc();
+
 static inline uint16_t kchal_fbval_rgb(uint8_t r, uint8_t g, uint8_t b) {
 	uint16_t v=((r>>3)<<11)|((g>>2)<<5)|((b>>3)<<0);
 	return (v>>8)|((v&0xff)<<8);
 }
+
+static inline uint16_t kchal_ugui_rgb(uint8_t r, uint8_t g, uint8_t b) {
+	uint16_t v=((r>>3)<<11)|((g>>2)<<5)|((b>>3)<<0);
+	return (v&0xffff);
+}
+
 
 #endif

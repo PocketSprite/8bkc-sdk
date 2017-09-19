@@ -14,6 +14,8 @@
 #include "io.h"
 #include "ssd1331.h"
 #include "appfs.h"
+#include "8bkc-ugui.h"
+#include "ugui.h"
 
 SemaphoreHandle_t oledMux;
 SemaphoreHandle_t configMux;
@@ -41,11 +43,13 @@ typedef struct {
 } ConfVars;
 #define VOLUME_KEY "vol"
 #define CONTRAST_KEY "con"
+#define BATFULLADC_KEY "batadc"
 
 static ConfVars config, savedConfig;
 static QueueHandle_t soundQueue;
 static int soundRunning=0;
 static nvs_handle nvsHandle;
+static uint32_t battFullAdcVal;
 
 int kchal_get_hw_ver() {
 	return 1;
@@ -94,7 +98,17 @@ static void kchal_mgmt_task(void *arg) {
 		int chgStatus=ioGetChgStatus();
 		if (chgStatus!=oldChgStatus) {
 			if (chgStatus==IO_CHG_NOCHARGER) {
-				setLed(0xF800);
+				if (kchal_get_bat_pct()<10) {
+					ledBlink^=1;
+					setLed(0xF800);
+					if (ledBlink&1) {
+						setLed(0xF800);
+					} else {
+						setLed(0x0000);
+					}
+				} else {
+					setLed(0xF800);
+				}
 			} else if (chgStatus==IO_CHG_CHARGING) {
 				ledBlink^=1;
 				if (ledBlink&1) {
@@ -116,22 +130,92 @@ static void kchal_mgmt_task(void *arg) {
 	}
 }
 
-void kchal_init() {
+void kchal_init_hw() {
 	oledMux=xSemaphoreCreateMutex();
 	configMux=xSemaphoreCreateMutex();
 	//Initialize IO
 	ioInit();
-	//Init appfs
-	esp_err_t r=appfsInit(1, 3);
-	assert(r==ESP_OK);
-	printf("Appfs inited.\n");
 	//Clear entire OLED screen
 	uint16_t *fb=malloc(OLED_REAL_H*OLED_REAL_W*2);
 	assert(fb);
 	memset(fb, 0, OLED_REAL_H*OLED_REAL_W*2);
 	ssd1331SendFB(fb, 0, 0, OLED_REAL_W, OLED_REAL_H);
 	free(fb);
+}
 
+//Gets called when battery is full for a while. Used to calibrate the ADC: we know the battery is at
+//precisely 4.2V so whatever value we measure on the ADC is that.
+void kchal_cal_adc() {
+	if (kchal_get_chg_status()!=KC_CHG_FULL) return;
+	uint32_t v=ioGetVbatAdcVal();
+	if (v==0) return;
+	printf("Full battery ADC cal: 4.2V equals ADC val %d\n", v);
+	nvs_set_u32(nvsHandle, BATFULLADC_KEY, v);
+	battFullAdcVal=v;
+}
+
+#define BAT_FULL_MV 4200
+#define BAT_EMPTY_MV 3200
+
+int kchal_get_bat_mv() {
+	int v=ioGetVbatAdcVal();
+	if (battFullAdcVal==0) return 0;
+	return (v*BAT_FULL_MV)/battFullAdcVal;
+}
+
+int kchal_get_bat_pct() {
+	int pct=((kchal_get_bat_mv()-BAT_EMPTY_MV)*100)/(BAT_FULL_MV-BAT_EMPTY_MV);
+	if (pct>100) pct=100;
+	if (pct<0) pct=0;
+	return pct;
+}
+
+const static uint8_t batEmptyIcon[]={
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,
+	1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,
+	1,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,
+	1,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,
+	1,0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+	1,0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+	1,0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+	1,0,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+	1,0,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,
+	1,0,2,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,
+	1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0
+};
+
+
+static void show_bat_empty_icon() {
+	const int cols[2][3]={
+		{0x0000, 0xffff, 0xf800},
+		{0x0000, 0xffff, 0x0000},
+	};
+	kcugui_init();
+	for (int i=0; i<6; i++) {
+		kcugui_cls();
+		UG_FontSelect(&FONT_6X8);
+		UG_SetForecolor(C_WHITE);
+		uint8_t *p=batEmptyIcon;
+		for (int y=0; y<12; y++) {
+			for (int x=0; x<32; x++) {
+				UG_DrawPixel(x+(80-32)/2, y+(64-12)/2, cols[i&1][*p++]);
+			}
+		}
+		kcugui_flush();
+		vTaskDelay(500/portTICK_RATE_MS);
+	}
+}
+
+void kchal_init_sdk() {
+	//Hack: This initializes a bunch of locks etc; that process uses a bunch of locks. If we do not
+	//do it here, it happens in the mgmt task, which is somewhat stack-starved.
+	esp_get_deep_sleep_wake_stub();
+
+	//Init appfs
+	esp_err_t r=appfsInit(0x43, 3);
+	assert(r==ESP_OK);
+	printf("Appfs inited.\n");
 	//Grab relevant nvram variables
 	r=nvs_flash_init();
 	if (r!=ESP_OK) {
@@ -139,15 +223,30 @@ void kchal_init() {
 	}
 	printf("NVS inited\n");
 
+	battFullAdcVal=2750; //default value
 	r=nvs_open("8bkc", NVS_READWRITE, &nvsHandle);
 	if (r==ESP_OK) {
 		nvs_get_u8(nvsHandle, VOLUME_KEY, &config.volume);
 		nvs_get_u8(nvsHandle, CONTRAST_KEY, &config.contrast);
 		memcpy(&savedConfig, &config, sizeof(config));
+		nvs_get_u32(nvsHandle, BATFULLADC_KEY, &battFullAdcVal);
 	}
 
-	//Too little stack here leads to issues in the deep_sleep code... yeah.
-	xTaskCreatePinnedToCore(&kchal_mgmt_task, "kchal", 1024*16, NULL, 5, NULL, 0);
+	//Use this info to measure battery voltage. If too low, refuse to start.
+	ioVbatForceMeasure();
+	printf("Battery voltage: %d mv\n", kchal_get_bat_mv());
+	if (kchal_get_bat_pct() == 0) {
+		show_bat_empty_icon();
+		kchal_power_down();
+	}
+
+
+	xTaskCreatePinnedToCore(&kchal_mgmt_task, "kchal", 1024*4, NULL, 5, NULL, 0);
+}
+
+void kchal_init() {
+	kchal_init_hw();
+	kchal_init_sdk();
 }
 
 uint32_t kchal_get_keys() {
@@ -242,7 +341,7 @@ line does the fade out because the 14V line is cut while the display still displ
 actually see the 14V decoupling caps emptying themselves over the LEDs.
 */
 
-void setPdownSquare(uint16_t *fb, int s) {
+static void setPdownSquare(uint16_t *fb, int s) {
 	uint16_t col=kchal_fbval_rgb(s*4+8, s*4+8, s*4+8);
 	for (int x=s; x<=KC_SCREEN_W-s; x++) {
 		for (int y=s; y<=KC_SCREEN_H-s; y++) {

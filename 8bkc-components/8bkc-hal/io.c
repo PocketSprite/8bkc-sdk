@@ -65,10 +65,26 @@ static void oled_spi_pre_transfer_callback(spi_transaction_t *t) {
 }
 
 
+#define VBATMEAS_HISTCT 16
+
+int vbatHist[VBATMEAS_HISTCT]={0};
+int vbatHistPos=0;
+
+int ioGetVbatAdcVal() {
+	int sum=0;
+	for (int i=0; i<VBATMEAS_HISTCT; i++) {
+		if (vbatHist[i]==0) {
+			//Measured less than VBATMEAS_HISTCT values
+			return (i==0)?0:sum/i;
+		}
+		sum+=vbatHist[i];
+	}
+	return sum/VBATMEAS_HISTCT;
+}
+
 void ioOledSend(char *data, int count, int dc) {
 	esp_err_t ret;
 	spi_transaction_t t;
-	static int vbat, vbatCtr=0;
 	if (count==0) return;             //no need to send anything
 	memset(&t, 0, sizeof(t));       //Zero out the transaction
 	t.length=count*8;                 //Len is in bytes, transaction length is in bits.
@@ -77,16 +93,20 @@ void ioOledSend(char *data, int count, int dc) {
 	ret=spi_device_transmit(oled_spi_handle, &t);  //Transmit!
 	assert(ret==ESP_OK);            //Should have had no issues.
 
-	GPIO.func_out_sel_cfg[33].oen_inv_sel=1;
+	GPIO.func_out_sel_cfg[GPIO_OLED_CS_PIN].oen_inv_sel=1;
 	ets_delay_us(10);
-	vbat+=adc1_get_voltage(VBAT_ADC_CHAN);
-	vbatCtr++;
-	if (vbatCtr==64) {
-//		printf("Vbat: %d\n", vbat/64);
-		vbat=0;
-		vbatCtr=0;
+	vbatHist[vbatHistPos++]=adc1_get_voltage(VBAT_ADC_CHAN);
+	if (vbatHistPos>=VBATMEAS_HISTCT) vbatHistPos=0;
+	GPIO.func_out_sel_cfg[GPIO_OLED_CS_PIN].oen_inv_sel=0;
+}
+
+void ioVbatForceMeasure() {
+	GPIO.func_out_sel_cfg[GPIO_OLED_CS_PIN].oen_inv_sel=1;
+	for (int i=0; i<VBATMEAS_HISTCT; i++) {
+		vTaskDelay(1);
+		vbatHist[i]=adc1_get_voltage(VBAT_ADC_CHAN);
 	}
-	GPIO.func_out_sel_cfg[33].oen_inv_sel=0;
+	GPIO.func_out_sel_cfg[GPIO_OLED_CS_PIN].oen_inv_sel=0;
 }
 
 int ioGetChgStatus() {
@@ -151,7 +171,7 @@ void ioPowerDown() {
 	//debounce
 	vTaskDelay(200/portTICK_PERIOD_MS);
 
-	esp_deep_sleep_enable_ext1_wakeup(GPIO_BTN_PWR, ESP_EXT1_WAKEUP_ANY_HIGH);
+	esp_deep_sleep_enable_ext1_wakeup(GPIO_BTN_PWR|GPIO_CHGSTDBY, ESP_EXT1_WAKEUP_ANY_HIGH);
 //	esp_deep_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
 	esp_deep_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);
 
@@ -233,12 +253,6 @@ void ioInit() {
 	uint64_t pinsToClear=GPIO_OLED_PWR|GPIO_OLED_RST|GPIO_OLED_CS|GPIO_OLED_CLK|GPIO_OLED_DC|GPIO_OLED_DAT|GPIO_14VEN;
 	WRITE_PERI_REG(GPIO_OUT_W1TC_REG, pinsToClear);
 	WRITE_PERI_REG(GPIO_OUT1_W1TC_REG, (pinsToClear>>32UL));
-
-/*
-	gpio_matrix_out(23, VSPID_OUT_IDX,0,0);
-	gpio_matrix_out(18, VSPICLK_OUT_IDX,0,0);
-	gpio_matrix_out(5, VSPICS0_OUT_IDX,0,0);
-*/
 
 	//Initialize battery voltage ADC
 	//We double-use /CS as the voltage measurement pin.
