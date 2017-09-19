@@ -619,7 +619,10 @@ esp_err_t appfsErase(appfs_handle_t fd, size_t start, size_t len) {
 	esp_err_t r;
 	int page=(int)fd;
 	if (!appfsFdValid(page)) return ESP_ERR_NOT_FOUND;
-	if (appfsMeta[appfsActiveMeta].page[page].size < (start+len)) {
+	//Bail out if trying to erase past the file end.
+	//Allow erases past the end of the file but still within the page reserved for the file.
+	int roundedSize=(appfsMeta[appfsActiveMeta].page[page].size+(APPFS_SECTOR_SZ-1))&(~(APPFS_SECTOR_SZ-1));
+	if (roundedSize < (start+len)) {
 		return ESP_ERR_INVALID_SIZE;
 	}
 
