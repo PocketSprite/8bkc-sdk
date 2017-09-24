@@ -9,6 +9,7 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
+#include "driver/dac.h"
 #include "soc/rtc_cntl_reg.h"
 #include "8bkc-hal.h"
 #include "io.h"
@@ -307,6 +308,16 @@ void kchal_sound_start(int rate, int buffsize) {
 	i2s_set_pin(0, NULL);
 	i2s_set_dac_mode(I2S_DAC_CHANNEL_LEFT_EN);
 	i2s_set_sample_rates(0, cfg.sample_rate);
+	//I2S enables *both* DAC channels; we only need DAC2. DAC1 is connected to the select button.
+	CLEAR_PERI_REG_MASK(RTC_IO_PAD_DAC1_REG, RTC_IO_PDAC1_DAC_XPD_FORCE_M);
+	CLEAR_PERI_REG_MASK(RTC_IO_PAD_DAC1_REG, RTC_IO_PDAC1_XPD_DAC_M);
+	gpio_config_t io_conf={
+		.intr_type=GPIO_INTR_DISABLE,
+		.mode=GPIO_MODE_INPUT,
+		.pull_up_en=1,
+		.pin_bit_mask=(1<<25)
+	};
+	gpio_config(&io_conf);
 	soundRunning=1;
 }
 
@@ -378,6 +389,14 @@ void kchal_set_new_app(int fd) {
 	}
 }
 
+
+/*
+We use RTC store0 as a location to communicate with the bootloader.
+Bit 31-24: 0xA5 if register is valid
+Bit 8: 1 if charge detection needs to be overridden (charger is plugged in, but user pressed power to start
+       app anyway)
+Bit 7-0: FD of app to start
+*/
 int kchal_get_new_app() {
 	uint32_t r=REG_READ(RTC_CNTL_STORE0_REG);
 	if ((r&0xFF000000)!=0xA5000000) return -1;

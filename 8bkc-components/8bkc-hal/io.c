@@ -46,7 +46,6 @@
 #define GPIO_DAC (1<<26)
 #define GPIO_CHGDET (1<<19) //battery is charging, low-active
 #define GPIO_CHGSTDBY ((uint64_t)1<<36)  //micro-usb plugged
-#define GPIO_VBAT ((uint64_t)1<<36)
 #define GPIO_OLED_PWR (1<<2)
 #define GPIO_14VEN (1<<17) //High enables 14V generation for OLED (and audio amp)
 

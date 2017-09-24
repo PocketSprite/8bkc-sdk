@@ -272,13 +272,46 @@ static bool ota_select_valid(const esp_ota_select_entry_t *s)
  *  @inputs:        void
  */
 
+//If select+start+power is pressed, we do a reset. If power is released and the other two buttons are held,
+//we do an emergency reset into the firmware chooser, where the user can decide to nuke the AppFs and/or NVS.
+#define FORCE_FACTORY_BTN1 25
+#define FORCE_FACTORY_BTN2 27
+
+//Returns true if key combo indicates a recovery boot.
+int is_recovery_boot() {
+	SET_PERI_REG_MASK(RTC_IO_TOUCH_PAD7_REG,RTC_IO_TOUCH_PAD7_RUE_M); //Use RTC to set GPIO27 pullup
+	SET_PERI_REG_MASK(RTC_IO_PAD_DAC1_REG, RTC_IO_PDAC1_RUE_M); //Use RTC to set GPIO26 pullup
+	SET_PERI_REG_MASK(PERIPHS_IO_MUX_GPIO25_U, FUN_IE);
+	GPIO.enable_w1tc=(1<<FORCE_FACTORY_BTN1);
+	GPIO.enable_w1tc=(1<<FORCE_FACTORY_BTN2);
+	ets_delay_us(100);
+	return (!(GPIO.in&(1<<FORCE_FACTORY_BTN1)) && (!(GPIO.in&(1<<FORCE_FACTORY_BTN2))));
+}
 
 //Copied from kchal, which we don't want to link inhere.
+//See 8bkc-hal/kchal.c for explanation of the bits in the store0 register
 int kchal_get_new_app() {
 	uint32_t r=REG_READ(RTC_CNTL_STORE0_REG);
 	ESP_LOGI(TAG, "RTC store0 reg: %x", r);
 	if ((r&0xFF000000)!=0xA5000000) return -1;
 	return r&0xff;
+}
+
+//This is high if USB is plugged in, low otherwise.
+#define GPIO_CHGSTDBY 36
+
+//We use this to see if we need to force a boot to the chooser: if the boot is because
+//USB is plugged in and the override bit is not set, this returns true.
+int boot_charging_mode() {
+	GPIO.enable1_w1tc.val=(1<<(GPIO_CHGSTDBY-32)); //Needed? GPIO26 is always input anyway...
+	if (GPIO.in1.val&(1<<(GPIO_CHGSTDBY-32))) {
+		//USB is plugged in. Return true only if not overridden.
+		uint32_t r=REG_READ(RTC_CNTL_STORE0_REG);
+		if ((r&0xFF000000)!=0xA5000000) return -1;
+		return (r&0x100)?false:true;
+	} else {
+		return false;
+	}
 }
 
 
@@ -338,21 +371,6 @@ err:
 
 #define CHOOSER_NAME "chooser.app"
 
-//If select+start+power is pressed, we do a reset. If power is released and the other two buttons are held,
-//we do an emergency reset into the firmware chooser, where the user can decide to nuke the AppFs and/or NVS.
-#define FORCE_FACTORY_BTN1 25
-#define FORCE_FACTORY_BTN2 27
-
-//Returns true if key combo indicates a recovery boot.
-int is_recovery_boot() {
-	SET_PERI_REG_MASK(RTC_IO_TOUCH_PAD7_REG,RTC_IO_TOUCH_PAD7_RUE_M); //Use RTC to set GPIO27 pullup
-	SET_PERI_REG_MASK(RTC_IO_PAD_DAC1_REG, RTC_IO_PDAC1_RUE_M); //Use RTC to set GPIO26 pullup
-	SET_PERI_REG_MASK(PERIPHS_IO_MUX_GPIO25_U, FUN_IE);
-	GPIO.enable_w1tc=(1<<FORCE_FACTORY_BTN1);
-	GPIO.enable_w1tc=(1<<FORCE_FACTORY_BTN2);
-	ets_delay_us(100);
-	return (!(GPIO.in&(1<<FORCE_FACTORY_BTN1)) && (!(GPIO.in&(1<<FORCE_FACTORY_BTN2))));
-}
 
 void try_boot_appfs(bootloader_state_t *bs) {
     esp_err_t err;
@@ -379,7 +397,10 @@ void try_boot_appfs(bootloader_state_t *bs) {
 	//Also check for WDT reset because that's what deep sleep does on a rev0 esp32...
 	appfs_handle_t fd=-1;
 	if (rtc_get_reset_reason(0) == DEEPSLEEP_RESET|| rtc_get_reset_reason(0) == TG0WDT_SYS_RESET) {
-		fd=kchal_get_new_app();
+		//Only load new app if not charging; fall back to chooser otherwise.
+		if (!boot_charging_mode()) {
+			fd=kchal_get_new_app();
+		}
 	} else {
 		ESP_LOGI(TAG, "Reset seems involuntary. Not booting app in RTC memory.");
 	}
@@ -393,8 +414,9 @@ void try_boot_appfs(bootloader_state_t *bs) {
 	}
 	//App in RTC wasn't bootable.
 	if (appfsExists(CHOOSER_NAME)) {
-		ESP_LOGI(TAG, "Found chooser.app in appfs. Starting.");
+		ESP_LOGI(TAG, "Found "CHOOSER_NAME" in appfs. Starting.");
 		fd=appfsOpen(CHOOSER_NAME);
+		appfs_try_boot_fd(fd);
 		ESP_LOGE(TAG, "Couldn't start chooser.app! Falling back to partition app.");
 	} else {
 		ESP_LOGI(TAG, CHOOSER_NAME" not found; not booting into alternate chooser.");
