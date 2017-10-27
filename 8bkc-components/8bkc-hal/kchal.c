@@ -141,6 +141,7 @@ void kchal_init_hw() {
 	assert(fb);
 	memset(fb, 0, OLED_REAL_H*OLED_REAL_W*2);
 	ssd1331SendFB(fb, 0, 0, OLED_REAL_W, OLED_REAL_H);
+	ssd1331SetContrast(config.contrast);
 	free(fb);
 }
 

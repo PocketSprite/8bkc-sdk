@@ -10,8 +10,8 @@
 //#define USE_MULTITASKING    
 
 /* Enable color mode */
-#define USE_COLOR_RGB888   // RGB = 0xFF,0xFF,0xFF
-//#define USE_COLOR_RGB565   // RGB = 0bRRRRRGGGGGGBBBBB 
+//#define USE_COLOR_RGB888   // RGB = 0xFF,0xFF,0xFF
+#define USE_COLOR_RGB565   // RGB = 0bRRRRRGGGGGGBBBBB 
 
 /* Enable needed fonts here */
 #define  USE_FONT_4X6
