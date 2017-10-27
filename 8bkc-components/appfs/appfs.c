@@ -458,6 +458,7 @@ esp_err_t appfsDeleteFile(const char *filename) {
 
 
 //This essentially writes a new meta page with the name changed.
+//If a file is found with the name, we also delete it.
 esp_err_t appfsRename(const char *from, const char *to) {
 	esp_err_t r;
 	int newMeta;
@@ -465,7 +466,6 @@ esp_err_t appfsRename(const char *from, const char *to) {
 	AppfsPageInfo pi;
 	//See if we actually need to do something
 	if (!appfsExists(from)) return ESP_FAIL;
-	if (appfsExists(to)) return ESP_FAIL;
 	//Create a new management sector
 	newMeta=(appfsActiveMeta+1)%APPFS_META_CNT;
 	r=esp_partition_erase_range(appfsPart, newMeta*APPFS_META_SZ, APPFS_META_SZ);
@@ -474,15 +474,29 @@ esp_err_t appfsRename(const char *from, const char *to) {
 	memcpy(&hdr, &appfsMeta[appfsActiveMeta].hdr, sizeof(hdr));
 	hdr.serial++;
 	hdr.crc32=0;
+	int nextDelete=-1;
 	for (int j=0; j<APPFS_PAGES; j++) {
 		//Grab old page info from current meta sector
 		memcpy(&pi, &appfsMeta[appfsActiveMeta].page[j], sizeof(pi));
-		if (pi.used==APPFS_USE_DATA && strcmp(pi.name, from)==0) {
+		int needDelete=0;
+		if (nextDelete==-1 && pi.used==APPFS_USE_DATA && strcmp(pi.name, to)==0) {
+			//First page of the dest file. We need to delete this!
+			nextDelete=pi.next;
+			needDelete=1;
+		} else if (nextDelete==j) {
+			//A page in the file to be deleted.
+			nextDelete=pi.next;
+			needDelete=1;
+		} else if (pi.used==APPFS_USE_DATA && strcmp(pi.name, from)==0) {
+			//Found old name. Rename to new.
 			strncpy(pi.name, to, sizeof(pi.name));
 			pi.name[sizeof(pi.name)-1]=0;
 		}
-		r=writePageInfo(newMeta, j, &pi);
-		if (r!=ESP_OK) return r;
+		//If hdr needs deletion, leave it at 0xfffff...
+		if (!needDelete) {
+			r=writePageInfo(newMeta, j, &pi);
+			if (r!=ESP_OK) return r;
+		}
 	}
 	r=writeHdr(&hdr, newMeta);
 	appfsActiveMeta=newMeta;
