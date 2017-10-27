@@ -208,10 +208,28 @@ static void show_bat_empty_icon() {
 	}
 }
 
+
+static uint32_t orig_store0_reg=0xFFFFFFFF;
+
+uint32_t kchal_rtc_reg_bootup_val() {
+	if (orig_store0_reg==0xFFFFFFFF) {
+		return REG_READ(RTC_CNTL_STORE0_REG);
+	} else {
+		return orig_store0_reg;
+	}
+}
+
 void kchal_init_sdk() {
 	//Hack: This initializes a bunch of locks etc; that process uses a bunch of locks. If we do not
 	//do it here, it happens in the mgmt task, which is somewhat stack-starved.
 	esp_get_deep_sleep_wake_stub();
+
+	//If we were force-started during an usb loading cycle, remove that bit so when we shut down we'll go
+	//back to the recharge screen
+	uint32_t rg=REG_READ(RTC_CNTL_STORE0_REG);
+	orig_store0_reg=rg; //save for later
+	rg&=(~0x100);
+	REG_WRITE(RTC_CNTL_STORE0_REG, rg);
 
 	//Init appfs
 	esp_err_t r=appfsInit(0x43, 3);
@@ -240,8 +258,6 @@ void kchal_init_sdk() {
 		show_bat_empty_icon();
 		kchal_power_down();
 	}
-
-
 	xTaskCreatePinnedToCore(&kchal_mgmt_task, "kchal", 1024*4, NULL, 5, NULL, 0);
 }
 
@@ -321,6 +337,14 @@ void kchal_sound_start(int rate, int buffsize) {
 	soundRunning=1;
 }
 
+void kchal_sound_mute(int doMute) {
+	if (doMute) {
+		dac_i2s_disable();
+	} else {
+		dac_i2s_enable();
+	}
+}
+
 void kchal_sound_stop() {
 	i2s_driver_uninstall(0);
 }
@@ -353,6 +377,7 @@ actually see the 14V decoupling caps emptying themselves over the LEDs.
 */
 
 static void setPdownSquare(uint16_t *fb, int s) {
+	if (s<=0 || s>32) return;
 	uint16_t col=kchal_fbval_rgb(s*4+8, s*4+8, s*4+8);
 	for (int x=s; x<=KC_SCREEN_W-s; x++) {
 		for (int y=s; y<=KC_SCREEN_H-s; y++) {
@@ -362,11 +387,13 @@ static void setPdownSquare(uint16_t *fb, int s) {
 }
 
 void kchal_power_down() {
-	uint16_t *tmpfb=malloc(KC_SCREEN_H*KC_SCREEN_W*2);
+	//Reuse ugui framebuffer if we can, otherwise try to allocate a new one.
+	uint16_t *tmpfb=kcugui_get_fb();
+	if (tmpfb==NULL) tmpfb=malloc(KC_SCREEN_H*KC_SCREEN_W*2);
 	xSemaphoreTake(oledMux, 100/portTICK_PERIOD_MS);
 	if (tmpfb!=NULL) {
 		//Animate powerdown thing
-		for (int s=0; s<32; s++) {
+		for (int s=1; s<32; s++) {
 			memset(tmpfb, 0, KC_SCREEN_H*KC_SCREEN_W*2);
 			setPdownSquare(tmpfb, s);
 			ssd1331SendFB(tmpfb, OLED_FAKE_XOFF, OLED_FAKE_YOFF, OLED_FAKE_W, OLED_FAKE_H);
@@ -375,6 +402,12 @@ void kchal_power_down() {
 	}
 	ioOledPowerDown();
 	ioPowerDown();
+}
+
+void kchal_exit_to_chooser() {
+	kchal_set_new_app(-1);
+	kchal_boot_into_new_app();
+	abort();
 }
 
 int kchal_get_chg_status() {

@@ -40,6 +40,9 @@ void kchal_sound_push(uint8_t *buf, int len);
 
 void kchal_sound_stop();
 
+void kchal_sound_mute(int doMute);
+
+
 void kchal_power_down();
 
 int kchal_get_chg_status();
@@ -51,6 +54,8 @@ uint8_t kchal_get_volume();
 void kchal_set_contrast(int contrast);
 
 uint8_t kchal_get_contrast();
+
+void kchal_exit_to_chooser();
 
 void kchal_set_new_app(int fd);
 int kchal_get_new_app();

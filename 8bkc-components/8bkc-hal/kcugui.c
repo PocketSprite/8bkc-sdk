@@ -38,6 +38,8 @@ void kcugui_deinit() {
 	ugui=NULL;
 }
 
-
+uint16_t *kcugui_get_fb() {
+	return fb;
+}
 
 
