@@ -56,6 +56,12 @@ is implemented as a singleton.
 #include "esp_err.h"
 #include "appfs.h"
 #include "rom/cache.h"
+#include "sdkconfig.h"
+
+
+#if !CONFIG_SPI_FLASH_WRITING_DANGEROUS_REGIONS_ALLOWED
+#error "Appfs will not work with SPI flash dangerous regions checking. Please use 'make menuconfig' to enable writing to dangerous regions."
+#endif
 
 static const char *TAG = "appfs";
 

@@ -1,4 +1,8 @@
 menu "8BKC hardware config"
 
+config SUPPORT_8BKC
+	bool
+	default y
+	select SPI_FLASH_WRITING_DANGEROUS_REGIONS_ALLOWED
 
 endmenu
