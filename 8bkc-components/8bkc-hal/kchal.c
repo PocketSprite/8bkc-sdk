@@ -131,20 +131,6 @@ static void kchal_mgmt_task(void *arg) {
 	}
 }
 
-void kchal_init_hw() {
-	oledMux=xSemaphoreCreateMutex();
-	configMux=xSemaphoreCreateMutex();
-	//Initialize IO
-	ioInit();
-	//Clear entire OLED screen
-	uint16_t *fb=malloc(OLED_REAL_H*OLED_REAL_W*2);
-	assert(fb);
-	memset(fb, 0, OLED_REAL_H*OLED_REAL_W*2);
-	ssd1331SendFB(fb, 0, 0, OLED_REAL_W, OLED_REAL_H);
-	ssd1331SetContrast(config.contrast);
-	free(fb);
-}
-
 //Gets called when battery is full for a while. Used to calibrate the ADC: we know the battery is at
 //precisely 4.2V so whatever value we measure on the ADC is that.
 void kchal_cal_adc() {
@@ -220,7 +206,34 @@ uint32_t kchal_rtc_reg_bootup_val() {
 	}
 }
 
+#define INIT_HW_DONE 1
+#define INIT_SDK_DONE 2
+#define INIT_COMMON_DONE 4
+static int initstate=0;
+
+static void kchal_init_common() {
+	ssd1331SetContrast(config.contrast);
+	initstate|=INIT_COMMON_DONE;
+}
+
+void kchal_init_hw() {
+	if (initstate&INIT_HW_DONE) return; //already did this
+	oledMux=xSemaphoreCreateMutex();
+	configMux=xSemaphoreCreateMutex();
+	//Initialize IO
+	ioInit();
+	//Clear entire OLED screen
+	uint16_t *fb=malloc(OLED_REAL_H*OLED_REAL_W*2);
+	assert(fb);
+	memset(fb, 0, OLED_REAL_H*OLED_REAL_W*2);
+	ssd1331SendFB(fb, 0, 0, OLED_REAL_W, OLED_REAL_H);
+	free(fb);
+	initstate|=INIT_HW_DONE;
+	if (initstate==(INIT_HW_DONE|INIT_SDK_DONE)) kchal_init_common();
+}
+
 void kchal_init_sdk() {
+	if (initstate&INIT_SDK_DONE) return; //already did this
 	//Hack: This initializes a bunch of locks etc; that process uses a bunch of locks. If we do not
 	//do it here, it happens in the mgmt task, which is somewhat stack-starved.
 	esp_get_deep_sleep_wake_stub();
@@ -243,7 +256,10 @@ void kchal_init_sdk() {
 	}
 	printf("NVS inited\n");
 
-	battFullAdcVal=2750; //default value
+	//Default values
+	config.volume=128;
+	config.contrast=192;
+	battFullAdcVal=2750;
 	r=nvs_open("8bkc", NVS_READWRITE, &nvsHandle);
 	if (r==ESP_OK) {
 		nvs_get_u8(nvsHandle, VOLUME_KEY, &config.volume);
@@ -260,6 +276,8 @@ void kchal_init_sdk() {
 		kchal_power_down();
 	}
 	xTaskCreatePinnedToCore(&kchal_mgmt_task, "kchal", 1024*4, NULL, 5, NULL, 0);
+	initstate|=INIT_SDK_DONE;
+	if (initstate==(INIT_HW_DONE|INIT_SDK_DONE)) kchal_init_common();
 }
 
 void kchal_init() {
