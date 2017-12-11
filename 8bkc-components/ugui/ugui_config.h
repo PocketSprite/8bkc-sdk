@@ -2,6 +2,7 @@
 #define __UGUI_CONFIG_H
 
 #include "stdint.h"
+#include "sdkconfig.h"
 
 /* -------------------------------------------------------------------------------- */
 /* -- CONFIG SECTION                                                             -- */
@@ -14,24 +15,57 @@
 #define USE_COLOR_RGB565   // RGB = 0bRRRRRGGGGGGBBBBB 
 
 /* Enable needed fonts here */
+#if CONFIG_USE_FONT_4X6
 #define  USE_FONT_4X6
+#endif
+#if CONFIG_USE_FONT_5X8
 #define  USE_FONT_5X8
+#endif
+#if CONFIG_USE_FONT_5X12
 #define  USE_FONT_5X12
+#endif
+#if CONFIG_USE_FONT_6X8
 #define  USE_FONT_6X8
+#endif
+#if CONFIG_USE_FONT_6X10
 #define  USE_FONT_6X10
+#endif
+#if CONFIG_USE_FONT_7X12
 #define  USE_FONT_7X12
+#endif
+#if CONFIG_USE_FONT_8X8
 #define  USE_FONT_8X8
-//#define  USE_FONT_8X12_CYRILLIC
+#endif
+#if CONFIG_USE_FONT_8X12
 #define  USE_FONT_8X12
+#endif
+#if CONFIG_USE_FONT_8X12
 #define  USE_FONT_8X12
+#endif
+#if CONFIG_USE_FONT_8X14
 #define  USE_FONT_8X14
+#endif
+#if CONFIG_USE_FONT_10X16
 #define  USE_FONT_10X16
+#endif
+#if CONFIG_USE_FONT_12X16
 #define  USE_FONT_12X16
+#endif
+#if CONFIG_USE_FONT_12X20
 #define  USE_FONT_12X20
+#endif
+#if CONFIG_USE_FONT_16X26
 #define  USE_FONT_16X26
+#endif
+#if CONFIG_USE_FONT_22X36
 #define  USE_FONT_22X36
+#endif
+#if CONFIG_USE_FONT_24X40
 #define  USE_FONT_24X40
+#endif
+#if CONFIG_USE_FONT_32X53
 #define  USE_FONT_32X53
+#endif
 
 /* Specify platform-dependent integer types here */
 

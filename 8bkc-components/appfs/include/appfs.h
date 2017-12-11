@@ -30,6 +30,8 @@ void appfsDump();
 void appfsEntryInfo(appfs_handle_t fd, const char **name, int *size);
 appfs_handle_t appfsNextEntry(appfs_handle_t fd);
 size_t appfsGetFreeMem();
+esp_err_t appfsGetCurrentApp(appfs_handle_t *ret_app);
+
 
 #ifdef BOOTLOADER_BUILD
 #include "bootloader_flash.h"

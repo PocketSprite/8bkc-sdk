@@ -2,6 +2,8 @@
 #define KC_HAL_H
 
 #include <stdint.h>
+#include "nvs.h"
+
 
 #define KC_BTN_RIGHT (1<<0)
 #define KC_BTN_LEFT (1<<1)
@@ -64,6 +66,8 @@ void kchal_boot_into_new_app();
 int kchal_get_bat_mv();
 int kchal_get_bat_pct();
 void kchal_cal_adc();
+
+nvs_handle kchal_get_app_nvsh();
 
 static inline uint16_t kchal_fbval_rgb(uint8_t r, uint8_t g, uint8_t b) {
 	uint16_t v=((r>>3)<<11)|((g>>2)<<5)|((b>>3)<<0);

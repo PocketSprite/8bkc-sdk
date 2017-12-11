@@ -722,5 +722,36 @@ void appfsDump() {
 }
 
 
+esp_err_t appfsGetCurrentApp(appfs_handle_t *ret_app) {
+	//Grab offset of this function in appfs
+	size_t phys_offs = spi_flash_cache2phys(appfsGetCurrentApp);
+	phys_offs -= appfsPart->address;
+
+	int page=(phys_offs/APPFS_SECTOR_SZ)-1;
+	if (page<0 || page>=APPFS_PAGES) {
+		return ESP_ERR_NOT_FOUND;
+	}
+
+	//Find first sector for this page.
+	int tries=APPFS_PAGES; //make sure this loop always exits
+	while (appfsMeta[appfsActiveMeta].page[page].name[0]==0xff) {
+		int i;
+		for (i=0; i<APPFS_PAGES; i++) {
+			if (appfsMeta[appfsActiveMeta].page[i].next==page) {
+				page=i;
+				break;
+			}
+		}
+		//See if what we have still makes sense.
+		if (tries==0 || i>=APPFS_PAGES) return ESP_ERR_NOT_FOUND;
+		tries--;
+	}
+
+	//Okay, found!
+	*ret_app=page;
+	return ESP_OK;
+}
+
+
 
 #endif

@@ -49,7 +49,7 @@ typedef struct {
 static ConfVars config, savedConfig;
 static QueueHandle_t soundQueue;
 static int soundRunning=0;
-static nvs_handle nvsHandle;
+static nvs_handle nvsHandle=NULL, nvsAppHandle=NULL;
 static uint32_t battFullAdcVal;
 
 int kchal_get_hw_ver() {
@@ -267,6 +267,22 @@ void kchal_init_sdk() {
 		memcpy(&savedConfig, &config, sizeof(config));
 		nvs_get_u32(nvsHandle, BATFULLADC_KEY, &battFullAdcVal);
 	}
+	
+	//If available, grab app nvs handle
+	appfs_handle_t thisApp;
+	r=appfsGetCurrentApp(&thisApp);
+	if (r==ESP_OK) {
+		char *name;
+		appfsEntryInfo(thisApp, &name, NULL);
+		printf("Opening NVS storage for app %s\n", name);
+		r=nvs_open(name, NVS_READWRITE, &nvsAppHandle);
+		if (r!=ESP_OK) {
+			printf("Opening app NVS storage failed!\n");
+		}
+	} else {
+		printf("No app running; factory app?\n");
+	}
+
 
 	//Use this info to measure battery voltage. If too low, refuse to start.
 	ioVbatForceMeasure();
@@ -459,5 +475,9 @@ void kchal_boot_into_new_app() {
 	ioOledPowerDown();
 	esp_deep_sleep_enable_timer_wakeup(10);
 	esp_deep_sleep_start();
+}
+
+nvs_handle kchal_get_app_nvsh() {
+	return nvsAppHandle;
 }
 
