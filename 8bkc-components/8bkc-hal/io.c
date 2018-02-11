@@ -133,7 +133,7 @@ int ioJoyReadInput() {
 		if (!initial) {
 			i|=KC_BTN_POWER;
 			if (!powerWasPressed) powerPressedTime=xTaskGetTickCount();
-			if ((xTaskGetTickCount()-powerPressedTime)>(2000/portTICK_PERIOD_MS)) {
+			if ((xTaskGetTickCount()-powerPressedTime)>(1500/portTICK_PERIOD_MS)) {
 				i|=KC_BTN_POWER_LONG;
 			}
 			powerWasPressed=1;
