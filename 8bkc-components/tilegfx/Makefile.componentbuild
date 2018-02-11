@@ -1,0 +1,18 @@
+
+TILEGFXPATH := $(COMPONENT_PATH)
+
+$(TILEGFXPATH)/conv_png_tile/conv_png_tile: $(COMPONENT_PATH)/conv_png_tile/
+	MAKEFLAGS="" CC=$(HOSTCC) LD=$(HOSTLD) $(MAKE) -C $(TILEGFXPATH)/conv_png_tile
+
+
+#Call: $(eval $(call ConvertTiles,map1.tmx map2.tmx etc.tmx,out_name))
+define ConvertTiles
+COMPONENT_OBJS += $(2).o
+COMPONENT_DEPENDS += tilegfx
+COMPONENT_EXTRA_CLEAN += $$(COMPILING_COMPONENT_PATH)/$2.c $$(COMPILING_COMPONENT_PATH)/$2.h
+
+$$(COMPONENT_PATH)/./$(2).c $$(COMPONENT_PATH)/./$(2).h: $$(addprefix $$(COMPONENT_PATH)/,$1) $(TILEGFXPATH)/conv_png_tile/conv_png_tile ../include/sdkconfig.h
+	echo "Running conv_png_tile for $(2)"
+	$(TILEGFXPATH)/conv_png_tile/conv_png_tile $$(COMPONENT_PATH)/$2.c $$(COMPONENT_PATH)/$2.h $$(addprefix $$(COMPONENT_PATH)/,$1)
+
+endef

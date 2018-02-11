@@ -1,0 +1,3 @@
+*.o
+conv_png_tile
+*.d
