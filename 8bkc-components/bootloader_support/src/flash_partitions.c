@@ -22,6 +22,7 @@ esp_err_t esp_partition_table_basic_verify(const esp_partition_info_t *partition
   int num_parts;
   uint32_t chip_size = g_rom_flashchip.chip_size;
   *num_partitions = 0;
+  int has_md5=0;
 
   for(num_parts = 0; num_parts < ESP_PARTITION_TABLE_MAX_ENTRIES; num_parts++) {
     const esp_partition_info_t *part = &partition_table[num_parts];
@@ -32,26 +33,30 @@ esp_err_t esp_partition_table_basic_verify(const esp_partition_info_t *partition
       /* TODO: check md5 */
       ESP_LOGD(TAG, "partition table verified, %d entries", num_parts);
       *num_partitions = num_parts;
+      if (has_md5) (*num_partitions)--;
       return ESP_OK;
     }
 
-    if (part->magic != ESP_PARTITION_MAGIC) {
-        if (log_errors) {
-            ESP_LOGE(TAG, "partition %d invalid magic number 0x%x", num_parts, part->magic);
+    if (part->magic!=0xEBEB) { //magic for md5 partition
+        if (part->magic != ESP_PARTITION_MAGIC) {
+            if (log_errors) {
+                ESP_LOGE(TAG, "partition %d invalid magic number 0x%x", num_parts, part->magic);
+            }
+            return ESP_ERR_INVALID_STATE;
         }
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    const esp_partition_pos_t *pos = &part->pos;
-    if (pos->offset > chip_size || pos->offset + pos->size > chip_size) {
-        if (log_errors) {
-            ESP_LOGE(TAG, "partition %d invalid - offset 0x%x size 0x%x exceeds flash chip size 0x%x",
-                     num_parts, pos->offset, pos->size, chip_size);
+    
+        const esp_partition_pos_t *pos = &part->pos;
+        if (pos->offset > chip_size || pos->offset + pos->size > chip_size) {
+            if (log_errors) {
+                ESP_LOGE(TAG, "partition %d invalid - offset 0x%x size 0x%x exceeds flash chip size 0x%x",
+                         num_parts, pos->offset, pos->size, chip_size);
+            }
+           return ESP_ERR_INVALID_SIZE;
         }
-        return ESP_ERR_INVALID_SIZE;
+    } else {
+      has_md5=1;
     }
   }
-
   if (log_errors) {
       ESP_LOGE(TAG, "partition table has no terminating entry, not valid");
   }
