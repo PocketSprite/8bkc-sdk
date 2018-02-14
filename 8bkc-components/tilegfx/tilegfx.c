@@ -1,3 +1,7 @@
+/*
+ Simple graphics library for the PocketSprite based on 8x8 tiles.
+*/
+
 #include "tilegfx.h"
 #include "8bkc-hal.h"
 
