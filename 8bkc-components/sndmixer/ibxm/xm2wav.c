@@ -68,16 +68,28 @@ static int xm_to_wav( struct module *module, char *wav ) {
 			write_int32le( duration * 4 + 36, &wav[ 4 ] );
 			strcpy( &wav[ 8 ], "WAVEfmt " );
 			write_int32le( 16, &wav[ 16 ] );
+#if IBXM_MONO
+			write_int32le( 0x00010001, &wav[ 20 ] );
+			write_int32le( 48000, &wav[ 24 ] );
+			write_int32le( 48000 * 2, &wav[ 28 ] );
+			write_int32le( 0x00100004, &wav[ 32 ] );
+			strcpy( &wav[ 36 ], "data" );
+			write_int32le( duration * 2, &wav[ 40 ] );
+#else
 			write_int32le( 0x00020001, &wav[ 20 ] );
 			write_int32le( 48000, &wav[ 24 ] );
 			write_int32le( 48000 * 4, &wav[ 28 ] );
 			write_int32le( 0x00100004, &wav[ 32 ] );
 			strcpy( &wav[ 36 ], "data" );
 			write_int32le( duration * 4, &wav[ 40 ] );
+#endif
 			replay_seek( replay, 0 );
 			offset = 44;
 			while( offset < length ) {
-				samples = replay_get_audio( replay, mix_buf ) * 2;
+				samples = replay_get_audio( replay, mix_buf );
+#if !IBXM_MONO
+				samples = samples * 2; //because stereo
+#endif
 				for( idx = 0; idx < samples; idx++ ) {
 					ampl = mix_buf[ idx ];
 					if( ampl > 32767 ) {

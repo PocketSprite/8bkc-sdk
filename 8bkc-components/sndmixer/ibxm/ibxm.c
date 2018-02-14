@@ -18,6 +18,13 @@ void *my_calloc(size_t nmemb, size_t size, const char *function, int line) {
 	return calloc(nmemb, size);
 }
 #endif
+
+#if IBXM_MONO
+#define BYTES_PER_SAMPLE 2
+#else
+#define BYTES_PER_SAMPLE 4
+#endif
+
 const char *IBXM_VERSION = "ibxm/ac mod/xm/s3m replay 20171013 (c)mumart@gmail.com";
 
 static const int FP_SHIFT = 15, FP_ONE = 32768, FP_MASK = 32767;
@@ -1656,18 +1663,21 @@ static void channel_row( struct channel *channel, struct note *note ) {
 static void channel_resample( struct channel *channel, int *mix_buf,
 		int offset, int count, int sample_rate, int interpolate ) {
 	struct sample *sample = channel->sample;
-	int l_gain, r_gain, sam_idx, sam_fra, step;
+	int sam_idx, sam_fra, step;
 	int loop_len, loop_end, out_idx, out_end, y, m, c;
 	if( channel->ampl > 0 ) {
+#if !IBXM_MONO
+		int l_gain, r_gain;
 		l_gain = channel->ampl * ( 255 - channel->pann ) >> 8;
 		r_gain = channel->ampl * channel->pann >> 8;
+#endif
 		sam_idx = channel->sample_idx;
 		sam_fra = channel->sample_fra;
 		step = ( channel->freq << ( FP_SHIFT - 3 ) ) / ( sample_rate >> 3 );
 		loop_len = sample->loop_length;
 		loop_end = sample->loop_start + loop_len;
-		out_idx = offset * 2;
-		out_end = ( offset + count ) * 2;
+		out_idx = offset * (BYTES_PER_SAMPLE/2);
+		out_end = ( offset + count ) * (BYTES_PER_SAMPLE/2);
 		if( interpolate ) {
 			while( out_idx < out_end ) {
 				if( sam_idx >= loop_end ) {
@@ -1682,8 +1692,12 @@ static void channel_resample( struct channel *channel, int *mix_buf,
 				c = get_sample_data(channel->sample, sam_idx, channel->id);
 				m = get_sample_data(channel->sample, sam_idx + 1, channel->id) - c;
 				y = ( ( m * sam_fra ) >> FP_SHIFT ) + c;
+#if IBXM_MONO
+				mix_buf[ out_idx++ ] += ( y * channel->ampl ) >> FP_SHIFT;
+#else
 				mix_buf[ out_idx++ ] += ( y * l_gain ) >> FP_SHIFT;
 				mix_buf[ out_idx++ ] += ( y * r_gain ) >> FP_SHIFT;
+#endif
 				sam_fra += step;
 				sam_idx += sam_fra >> FP_SHIFT;
 				sam_fra &= FP_MASK;
@@ -1700,8 +1714,12 @@ static void channel_resample( struct channel *channel, int *mix_buf,
 					}
 				}
 				y = get_sample_data(channel->sample, sam_idx, channel->id);
+#if IBXM_MONO
+				mix_buf[ out_idx++ ] += ( y * channel->ampl ) >> FP_SHIFT;
+#else
 				mix_buf[ out_idx++ ] += ( y * l_gain ) >> FP_SHIFT;
 				mix_buf[ out_idx++ ] += ( y * r_gain ) >> FP_SHIFT;
+#endif
 				sam_fra += step;
 				sam_idx += sam_fra >> FP_SHIFT;
 				sam_fra &= FP_MASK;
@@ -1949,7 +1967,7 @@ static int calculate_tick_len( int tempo, int sample_rate ) {
 
 /* Returns the length of the output buffer required by replay_get_audio(). */
 int calculate_mix_buf_len( int sample_rate ) {
-	return ( calculate_tick_len( 32, sample_rate ) + 65 ) * 4;
+	return ( calculate_tick_len( 32, sample_rate ) + 65 ) * BYTES_PER_SAMPLE;
 }
 
 /* Returns the song duration in samples at the current sampling rate. */
@@ -1984,21 +2002,29 @@ int replay_seek( struct replay *replay, int sample_pos ) {
 
 static void replay_volume_ramp( struct replay *replay, int *mix_buf, int tick_len ) {
 	int idx, a1, a2, ramp_rate = 256 * 2048 / replay->sample_rate;
-	for( idx = 0, a1 = 0; a1 < 256; idx += 2, a1 += ramp_rate ) {
+	for( idx = 0, a1 = 0; a1 < 256; idx += (BYTES_PER_SAMPLE/2), a1 += ramp_rate ) {
 		a2 = 256 - a1;
 		mix_buf[ idx     ] = ( mix_buf[ idx     ] * a1 + replay->ramp_buf[ idx     ] * a2 ) >> 8;
+#if !IBXM_MONO
 		mix_buf[ idx + 1 ] = ( mix_buf[ idx + 1 ] * a1 + replay->ramp_buf[ idx + 1 ] * a2 ) >> 8;
+#endif
 	}
-	memcpy( replay->ramp_buf, &mix_buf[ tick_len * 2 ], 128 * sizeof( int ) );
+	memcpy( replay->ramp_buf, &mix_buf[ tick_len * (BYTES_PER_SAMPLE/2) ], 128 * sizeof( int ) );
 }
 
 /* 2:1 downsampling with simple but effective anti-aliasing. Buf must contain count * 2 + 1 stereo samples. */
 static void downsample( int *buf, int count ) {
 	int idx, out_idx, out_len = count * 2;
+#if !IBXM_MONO
 	for( idx = 0, out_idx = 0; out_idx < out_len; idx += 4, out_idx += 2 ) {
 		buf[ out_idx     ] = ( buf[ idx     ] >> 2 ) + ( buf[ idx + 2 ] >> 1 ) + ( buf[ idx + 4 ] >> 2 );
 		buf[ out_idx + 1 ] = ( buf[ idx + 1 ] >> 2 ) + ( buf[ idx + 3 ] >> 1 ) + ( buf[ idx + 5 ] >> 2 );
 	}
+#else
+	for( idx = 0, out_idx = 0; out_idx < out_len; idx += 2, out_idx += 1 ) {
+		buf[ out_idx     ] = ( buf[ idx     ] >> 2 ) + ( buf[ idx + 1 ] >> 1 ) + ( buf[ idx + 2 ] >> 2 );
+	}
+#endif
 }
 
 /* Generates audio and returns the number of stereo samples written into mix_buf. */
@@ -2006,7 +2032,7 @@ int replay_get_audio( struct replay *replay, int *mix_buf ) {
 	struct channel *channel;
 	int idx, num_channels, tick_len = calculate_tick_len( replay->tempo, replay->sample_rate );
 	/* Clear output buffer. */
-	memset( mix_buf, 0, ( tick_len + 65 ) * 4 * sizeof( int ) );
+	memset( mix_buf, 0, ( tick_len + 65 ) * BYTES_PER_SAMPLE * sizeof( int ) );
 	/* Resample. */
 	num_channels = replay->module->num_channels;
 	for( idx = 0; idx < num_channels; idx++ ) {

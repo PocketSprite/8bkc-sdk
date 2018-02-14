@@ -1,7 +1,10 @@
 
 /* ibxm/ac mod/xm/s3m replay (c)mumart@gmail.com */
 
+//Set to 1 to save the ASCII info (instruments, songname, ...) when loading
 #define IBXM_SAVE_ASCII_INFO 0
+//Set to 1 to output mono samples
+#define IBXM_MONO 1
 
 const char *IBXM_VERSION;
 
