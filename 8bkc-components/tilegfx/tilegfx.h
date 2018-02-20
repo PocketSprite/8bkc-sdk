@@ -5,10 +5,15 @@ TileGFX: A small tile-based renderer engine for the PocketSprite.
 #include <stdint.h>
 
 typedef struct {
+	int trans_col; //transparent color, or -1 if none
+	const uint16_t tile[];
+} tilegfx_tileset_t;
+
+typedef struct {
 	int h;
 	int w;
-	const uint16_t *gfx;
-	uint16_t tiles[];
+	const tilegfx_tileset_t *gfx;
+	const uint16_t tiles[];
 } tilegfx_map_t;
 
 typedef struct {

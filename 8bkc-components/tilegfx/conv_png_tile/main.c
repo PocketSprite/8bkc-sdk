@@ -26,6 +26,15 @@ struct tmx_llitem_t {
 
 tmx_llitem_t *tmxinfo=NULL;
 
+void conv_to_c_ident(char *str) {
+	char *p=str;
+	while (*p!=0) {
+		if (*p==' ') *p='_';
+		if (*p=='-') *p='_';
+		if (*p==':') *p='_';
+		p++;
+	}
+}
 
 xmlNodePtr findNodeByName(xmlNodePtr parent, const xmlChar *name) {
 	if (!parent) return NULL;
@@ -39,16 +48,22 @@ xmlNodePtr findNodeByName(xmlNodePtr parent, const xmlChar *name) {
 	return NULL;
 }
 
-int output_tileset(FILE *f, char *name) {
+int output_tileset(FILE *f, char *name, int trans_col) {
 	gdImagePtr im=gdImageCreateFromPng(f);
 	if (im==NULL) goto err;
 	int h=gdImageSY(im)/8;
 	int w=gdImageSX(im)/8;
-	fprintf(cfile, "extern const uint16_t tileset_%s[];\n", name);
-	fprintf(cfile, "const uint16_t tileset_%s[]={ //%d tiles", name, w*h);
+	fprintf(cfile, "extern const tilegfx_tileset_t tileset_%s;\n", name);
+	fprintf(cfile, "const tilegfx_tileset_t tileset_%s={ //%d tiles\n", name, w*h);
+	if (trans_col==-1) {
+		fprintf(cfile, "\t.trans_col=-1; //No transparency\n");
+	} else {
+		fprintf(cfile, "\t.trans_col=0x%04X,\n", trans_col);
+	}
+	fprintf(cfile, "\t.tile={");
 	for (int y=0; y<h; y++) {
 		for (int x=0; x<w; x++) {
-			fprintf(cfile, "\n\t");
+			fprintf(cfile, "\n\t\t");
 			for (int yy=0; yy<8; yy++) {
 				for (int xx=0; xx<8; xx++) {
 					int c=gdImageGetTrueColorPixel(im, x*8+xx, y*8+yy);
@@ -63,7 +78,7 @@ int output_tileset(FILE *f, char *name) {
 			}
 		}
 	}
-	fprintf(cfile, "\n};\n");
+	fprintf(cfile, "\n\t}\n};\n");
 	return 1;
 err:
 	fprintf(stderr, "Error outputing tileset for %s\n", name);
@@ -101,10 +116,20 @@ int load_tileset(xmlNode *tileset, char *designator, char **name) {
 		goto err;
 	}
 	char *src=xmlGetProp(image, "source");
-	
 	if (src==NULL) {
 		fprintf(stderr, "%s: No source attr\n", designator);
 		goto err;
+	}
+	char *transcolstr=xmlGetProp(image, "trans");
+	int trans_col=-1;
+	if (transcolstr) {
+		if (transcolstr[0]=='#') transcolstr++;
+		int c=strtol(transcolstr, NULL, 16);
+		int r=(c>>16)&0xff;
+		int g=(c>>8)&0xff;
+		int b=(c>>0)&0xff;
+		trans_col=((r>>(3))<<11)+((g>>(2))<<5)+((b>>(3))<<0);
+		trans_col=((trans_col<<8)|(trans_col>>8))&0xffff;
 	}
 	char *imgfile=malloc(strlen(basedir)+strlen(src)+2);
 	sprintf(imgfile, "%s%s", basedir, src);
@@ -114,8 +139,9 @@ int load_tileset(xmlNode *tileset, char *designator, char **name) {
 		goto err;
 	}
 	free(imgfile);
-	ret=output_tileset(f, tnames);
 	*name=strdup(tnames);
+	conv_to_c_ident(*name);
+	ret=output_tileset(f, *name, trans_col);
 	fclose(f);
 	return ret;
 err:
@@ -160,6 +186,7 @@ int write_map(xmlDoc *doc, xmlNode *layer, char *file, char *designator) {
 
 	char *name=malloc(strlen(mn)+strlen(filebase)+2);
 	sprintf(name, "%s_%s", filebase, mn);
+	conv_to_c_ident(name);
 	tmx_llitem_t *i=tmxinfo;
 	while (i!=NULL && strcmp(file, i->tmxname)!=0) i-i->next;
 	if (i==NULL) goto err;
@@ -185,6 +212,7 @@ int write_map(xmlDoc *doc, xmlNode *layer, char *file, char *designator) {
 	for (int i=0; i<w*h; i++) {
 		if ((i&31)==0) fprintf(cfile, "\n\t\t");
 		int tile=atoi(p)-1; //csv is base-1 for some reason; we want base-0.
+		if (tile==-1) tile=0xffff; //tile not filled in.
 		fprintf(cfile, "% 4d,", tile);
 		bytestotal+=2;
 		p=strchr(p, ',');

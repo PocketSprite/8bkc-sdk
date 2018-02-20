@@ -17,20 +17,30 @@ static uint16_t *fb;
 static tilegfx_rect_t fb_rect={0};
 
 //Render a tile that is not clipped by the screen extremities
-static void render_tile_full(uint16_t *dest, const uint16_t *tile) {
-	for (int y=0; y<8; y++) {
-		memcpy(dest, tile, 8*2);
-		tile+=8;
-		dest+=fb_rect.w;
+static void render_tile_full(uint16_t *dest, const uint16_t *tile, int trans_col) {
+	if (trans_col==-1) {
+		for (int y=0; y<8; y++) {
+			memcpy(dest, tile, 8*2);
+			tile+=8;
+			dest+=fb_rect.w;
+		}
+	} else {
+		for (int y=0; y<8; y++) {
+			for (int x=0; x<8; x++) {
+				if (tile[x]!=trans_col) dest[x]=tile[x];
+			}
+			tile+=8;
+			dest+=fb_rect.w;
+		}
 	}
 }
 
 //Render a tile that is / may be clipped by the screen extremities
-static void render_tile_part(uint16_t *dest, const uint16_t *tile, int xstart, int ystart, const tilegfx_rect_t *clip) {
+static void render_tile_part(uint16_t *dest, const uint16_t *tile, int xstart, int ystart, const tilegfx_rect_t *clip, int trans_col) {
 	for (int y=0; y<8; y++) {
 		if (y+ystart>=clip->x && y+ystart<clip->y+clip->h) {
 			for (int x=0; x<8; x++) {
-				if (x+xstart>=clip->y && x+xstart<clip->x+clip->w) dest[x]=tile[x];
+				if (x+xstart>=clip->y && x+xstart<clip->x+clip->w && tile[x]!=trans_col) dest[x]=tile[x];
 			}
 		}
 		tile+=8;
@@ -62,11 +72,14 @@ void tilegfx_tile_map_render(const tilegfx_map_t *tiles, int offx, int offy, con
 		int tileposx=offx/8;
 		uint16_t *pp=p;
 		for (int x=sx; x<ex; x+=8) {
-			if (x < dest->x || y < dest->y || x+7 >= dest->x+dest->w || y+7 >= dest->y+dest->h) {
-				render_tile_part(pp, &tiles->gfx[tiles->tiles[tileposx+tileposy]*64], 
-							x - dest->x, y - dest->y, dest);
-			} else {
-				render_tile_full(pp, &tiles->gfx[tiles->tiles[tileposx+tileposy]*64]);
+			int tileno=tiles->tiles[tileposx+tileposy];
+			if (tileno!=0xffff) {
+				if (x < dest->x || y < dest->y || x+7 >= dest->x+dest->w || y+7 >= dest->y+dest->h) {
+					render_tile_part(pp, &tiles->gfx->tile[tileno*64], 
+								x - dest->x, y - dest->y, dest, tiles->gfx->trans_col);
+				} else {
+					render_tile_full(pp, &tiles->gfx->tile[tileno*64], tiles->gfx->trans_col);
+				}
 			}
 			tileposx++;
 			if (tileposx >= tiles->w) tileposx=0; //wraparound
