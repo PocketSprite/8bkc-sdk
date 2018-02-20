@@ -6,6 +6,12 @@
 #include "8bkc-hal.h"
 #include <stdlib.h>
 #include <string.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
+#include "freertos/semphr.h"
+#include "esp_timer.h"
+
 
 static uint16_t *fb;
 static int fb_w=0, fb_h=0;
@@ -70,8 +76,14 @@ void tilegfx_tile_map_render(const tilegfx_map_t *tiles, int offx, int offy, con
 	}
 }
 
+esp_timer_handle_t vbl_timer=NULL;
+SemaphoreHandle_t vbl_sema=NULL;
 
-void tilegfx_init(int doublesize) {
+static void vbl_cb(void *arg) {
+	xSemaphoreGive(vbl_sema);
+}
+
+int tilegfx_init(int doublesize, int hz) {
 	if (doublesize) {
 		fb_w=KC_SCREEN_W*2;
 		fb_h=KC_SCREEN_H*2;
@@ -80,6 +92,36 @@ void tilegfx_init(int doublesize) {
 		fb_h=KC_SCREEN_H;
 	}
 	fb=malloc(fb_w*fb_h*2);
+	if (!fb) goto err;
+	vbl_sema=xSemaphoreCreateBinary();
+	const esp_timer_create_args_t args={
+		.callback=vbl_cb,
+		.arg=NULL,
+		.dispatch_method=ESP_TIMER_TASK,
+		.name="vbl"
+	};
+	esp_err_t err=esp_timer_create(&args, &vbl_timer);
+	if (err!=ESP_OK) goto err;
+	esp_timer_start_periodic(vbl_timer, 1000000/hz);
+	return 1;
+err:
+	tilegfx_deinit();
+	return 0;
+}
+
+void tilegfx_deinit() {
+	if (fb) {
+		free(fb);
+		fb=NULL;
+	}
+	if (vbl_timer) {
+		esp_timer_delete(vbl_timer);
+		vbl_timer=NULL;
+	}
+	if (vbl_sema) {
+		vSemaphoreDelete(vbl_sema);
+		vbl_sema=NULL;
+	}
 }
 
 //32-bit pixel:
@@ -121,10 +163,36 @@ void undo_x2_scaling() {
 	}
 }
 
+void tilegfx_fade(uint8_t r, uint8_t g, uint8_t b, uint8_t pct) {
+	//Pre-calculate mixed r, g, b components. rr, rg, rb already will be in the fb format
+	//and can be ORed to be directly written into the fb. pct = 255 for transparent, 0 for only the rgb values given
+	uint16_t rr[32], rg[64], rb[32];
+	for (int i=0; i<32; i++) {
+		int c=((i*8*pct+r*(255-pct))>>11)<<11;
+		rr[i]=(c>>8)|(c<<8);
+	}
+	for (int i=0; i<64; i++) {
+		int c=((i*4*pct+g*(255-pct))>>10)<<5;
+		rg[i]=(c>>8)|(c<<8);
+	}
+	for (int i=0; i<32; i++) {
+		int c=((i*8*pct+b*(255-pct))>>11)<<0;
+		rb[i]=(c>>8)|(c<<8);
+	}
+
+	//Precalculation done. Do actual fade.
+	for (int i=0; i<fb_w*fb_h; i++) {
+		uint16_t c=fb[i];
+		c=(c<<8)|(c>>8);
+		fb[i]=rr[c>>11]|rg[(c>>5)&0x3f]|rb[c&0x1f];
+	}
+}
+
 void tilegfx_flush() {
 	if (fb_w!=KC_SCREEN_W) {
 		undo_x2_scaling();
 	}
 	kchal_send_fb(fb);
+	xSemaphoreTake(vbl_sema, portMAX_DELAY);
 }
 

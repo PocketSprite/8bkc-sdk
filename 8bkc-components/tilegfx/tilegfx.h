@@ -17,5 +17,7 @@ typedef struct {
 } tilegfx_rect_t;
 
 void tilegfx_tile_map_render(const tilegfx_map_t *tiles, int offx, int offy, const tilegfx_rect_t *dest);
-void tilegfx_init(int double_res);
+void tilegfx_fade(uint8_t r, uint8_t g, uint8_t b, uint8_t pct);
+int tilegfx_init(int double_res, int hz);
 void tilegfx_flush();
+void tilegfx_deinit();
