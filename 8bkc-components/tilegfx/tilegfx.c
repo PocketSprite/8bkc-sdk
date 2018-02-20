@@ -15,6 +15,7 @@
 
 static uint16_t *fb;
 static tilegfx_rect_t fb_rect={0};
+static uint64_t anim_start_time;
 
 //Render a tile that is not clipped by the screen extremities
 static void render_tile_full(uint16_t *dest, const uint16_t *tile, int trans_col) {
@@ -48,6 +49,20 @@ static void render_tile_part(uint16_t *dest, const uint16_t *tile, int xstart, i
 	}
 }
 
+static int get_tile_idx(const tilegfx_map_t *tiles, int idx) {
+	if (tiles->gfx->anim_offsets==NULL) return idx;
+	int off=tiles->gfx->anim_offsets[idx];
+	if (off==0xffff) return idx;
+	tilegfx_anim_frame_t *f=&tiles->gfx->anim_frames[off];
+	uint64_t t_ms=(esp_timer_get_time()-anim_start_time)/1000;
+	t_ms=t_ms%f->delay_ms; //first frame is total cycle len
+	while(t_ms) {
+		f++;
+		if (t_ms < f->delay_ms) return f->tile;
+		t_ms-=f->delay_ms;
+	}
+	return(idx); //should never happen
+}
 
 void tilegfx_tile_map_render(const tilegfx_map_t *tiles, int offx, int offy, const tilegfx_rect_t *rdest) {
 	const tilegfx_rect_t *dest=rdest;
@@ -75,10 +90,10 @@ void tilegfx_tile_map_render(const tilegfx_map_t *tiles, int offx, int offy, con
 			int tileno=tiles->tiles[tileposx+tileposy];
 			if (tileno!=0xffff) {
 				if (x < dest->x || y < dest->y || x+7 >= dest->x+dest->w || y+7 >= dest->y+dest->h) {
-					render_tile_part(pp, &tiles->gfx->tile[tileno*64], 
+					render_tile_part(pp, &tiles->gfx->tile[get_tile_idx(tiles, tileno)*64], 
 								x - dest->x, y - dest->y, dest, tiles->gfx->trans_col);
 				} else {
-					render_tile_full(pp, &tiles->gfx->tile[tileno*64], tiles->gfx->trans_col);
+					render_tile_full(pp, &tiles->gfx->tile[get_tile_idx(tiles, tileno)*64], tiles->gfx->trans_col);
 				}
 			}
 			tileposx++;
@@ -118,6 +133,7 @@ int tilegfx_init(int doublesize, int hz) {
 	esp_err_t err=esp_timer_create(&args, &vbl_timer);
 	if (err!=ESP_OK) goto err;
 	esp_timer_start_periodic(vbl_timer, 1000000/hz);
+	anim_start_time=0;
 	return 1;
 err:
 	tilegfx_deinit();
