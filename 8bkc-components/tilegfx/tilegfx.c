@@ -14,14 +14,14 @@
 
 
 static uint16_t *fb;
-static int fb_w=0, fb_h=0;
+static tilegfx_rect_t fb_rect={0};
 
 //Render a tile that is not clipped by the screen extremities
 static void render_tile_full(uint16_t *dest, const uint16_t *tile) {
 	for (int y=0; y<8; y++) {
 		memcpy(dest, tile, 8*2);
 		tile+=8;
-		dest+=fb_w;
+		dest+=fb_rect.w;
 	}
 }
 
@@ -34,12 +34,14 @@ static void render_tile_part(uint16_t *dest, const uint16_t *tile, int xstart, i
 			}
 		}
 		tile+=8;
-		dest+=fb_w;
+		dest+=fb_rect.w;
 	}
 }
 
 
-void tilegfx_tile_map_render(const tilegfx_map_t *tiles, int offx, int offy, const tilegfx_rect_t *dest) {
+void tilegfx_tile_map_render(const tilegfx_map_t *tiles, int offx, int offy, const tilegfx_rect_t *rdest) {
+	const tilegfx_rect_t *dest=rdest;
+	if (dest==NULL) dest=&fb_rect;
 	//Make sure to wrap around if offx/offy aren't in the tile map
 	offx%=(tiles->w*8);
 	offy%=(tiles->h*8);
@@ -55,7 +57,7 @@ void tilegfx_tile_map_render(const tilegfx_map_t *tiles, int offx, int offy, con
 
 	//x and y are the real onscreen coords that may fall outside the framebuffer.
 	int tileposy=((offy/8)*tiles->w);
-	uint16_t *p=fb+(fb_w*sy)+sx;
+	uint16_t *p=fb+(fb_rect.w*sy)+sx;
 	for (int y=sy; y<ey; y+=8) {
 		int tileposx=offx/8;
 		uint16_t *pp=p;
@@ -72,7 +74,7 @@ void tilegfx_tile_map_render(const tilegfx_map_t *tiles, int offx, int offy, con
 		}
 		tileposy+=tiles->w; //skip to next row
 		if (tileposy >= tiles->h*tiles->w) tileposy-=tiles->h*tiles->w; //wraparound
-		p+=fb_w*8; //we filled these 8 lines
+		p+=fb_rect.w*8; //we filled these 8 lines
 	}
 }
 
@@ -85,13 +87,13 @@ static void vbl_cb(void *arg) {
 
 int tilegfx_init(int doublesize, int hz) {
 	if (doublesize) {
-		fb_w=KC_SCREEN_W*2;
-		fb_h=KC_SCREEN_H*2;
+		fb_rect.w=KC_SCREEN_W*2;
+		fb_rect.h=KC_SCREEN_H*2;
 	} else {
-		fb_w=KC_SCREEN_W;
-		fb_h=KC_SCREEN_H;
+		fb_rect.w=KC_SCREEN_W;
+		fb_rect.h=KC_SCREEN_H;
 	}
-	fb=malloc(fb_w*fb_h*2);
+	fb=malloc(fb_rect.w*fb_rect.h*2);
 	if (!fb) goto err;
 	vbl_sema=xSemaphoreCreateBinary();
 	const esp_timer_create_args_t args={
@@ -181,7 +183,7 @@ void tilegfx_fade(uint8_t r, uint8_t g, uint8_t b, uint8_t pct) {
 	}
 
 	//Precalculation done. Do actual fade.
-	for (int i=0; i<fb_w*fb_h; i++) {
+	for (int i=0; i<fb_rect.w*fb_rect.h; i++) {
 		uint16_t c=fb[i];
 		c=(c<<8)|(c>>8);
 		fb[i]=rr[c>>11]|rg[(c>>5)&0x3f]|rb[c&0x1f];
@@ -189,7 +191,7 @@ void tilegfx_fade(uint8_t r, uint8_t g, uint8_t b, uint8_t pct) {
 }
 
 void tilegfx_flush() {
-	if (fb_w!=KC_SCREEN_W) {
+	if (fb_rect.w!=KC_SCREEN_W) {
 		undo_x2_scaling();
 	}
 	kchal_send_fb(fb);
