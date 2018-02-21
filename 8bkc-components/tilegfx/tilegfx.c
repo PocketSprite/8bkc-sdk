@@ -66,7 +66,30 @@ static int get_tile_idx(const tilegfx_map_t *tiles, int idx) {
 
 void tilegfx_tile_map_render(const tilegfx_map_t *tiles, int offx, int offy, const tilegfx_rect_t *rdest) {
 	const tilegfx_rect_t *dest=rdest;
-	if (dest==NULL) dest=&fb_rect;
+	tilegfx_rect_t mdest;
+	if (dest==NULL) {
+		//Whole screen; always safe
+		dest=&fb_rect;
+	} else {
+		memcpy(&mdest, rdest, sizeof(mdest));
+		dest=&mdest;
+		//Crop dest to screen
+		if (mdest.x<0) {
+			offx+=-mdest.x;
+			mdest.w+=mdest.x;
+			mdest.x=0;
+		} else if (mdest.x+mdest.w > fb_rect.w) {
+			mdest.w-=(mdest.x+mdest.w)-fb_rect.w;
+		}
+		if (mdest.y<0) {
+			offy+=-mdest.y;
+			mdest.h+=mdest.y;
+			mdest.y=0;
+		} else if (mdest.y+mdest.h > fb_rect.h) {
+			mdest.h-=(mdest.y+mdest.h)-fb_rect.h;
+		}
+		if (mdest.h<=0 || mdest.w<=0) return; //nothing to do
+	}
 	//Make sure to wrap around if offx/offy aren't in the tile map
 	offx%=(tiles->w*8);
 	offy%=(tiles->h*8);
