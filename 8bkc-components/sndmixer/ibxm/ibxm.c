@@ -306,6 +306,7 @@ void dispose_module( struct module *module ) {
 	struct instrument *instrument;
 	free( module->default_panning );
 	free( module->sequence );
+	free( module->pattern_cache.data );
 	if( module->patterns ) {
 		for( idx = 0; idx < module->num_patterns; idx++ ) {
 			free( module->patterns[ idx ].data );
@@ -320,6 +321,7 @@ void dispose_module( struct module *module ) {
 					if (!(instrument->samples[sam].flags & SAMPLE_DONTFREE)) {
 						 free( instrument->samples[ sam ].data );
 					}
+					free( instrument->samples[ sam ].dcache );
 				}
 				free( instrument->samples );
 			}

@@ -62,7 +62,7 @@ static int samplerate;
 static volatile uint32_t curr_id=0;
 static QueueHandle_t cmd_queue;
 
-//Grabs a new ID by atomically increasing curr_id and returning its value
+//Grabs a new ID by atomically increasing curr_id and returning its value. This is called outside of the audio playing thread, hence the atomicity.
 static uint32_t new_id() {
 	uint32_t old_id, new_id;
 	do {
@@ -81,8 +81,9 @@ static void clean_up_channel(int ch) {
 	}
 	free(channel[ch].buffer);
 	channel[ch].buffer=NULL;
-	channel[ch].id=0;
 	channel[ch].flags=0;
+	printf("Sndmixer: %d: cleaning up done\n", channel[ch].id); 
+	channel[ch].id=0;
 }
 
 static int find_free_channel() {
@@ -112,7 +113,7 @@ static int init_source(int ch, const sndmixer_source_t *srcfns, const void *data
 	channel[ch].chunksz=chunksz;
 	int real_rate=srcfns->get_sample_rate(channel[ch].src_ctx);
 	channel[ch].dds_rate=(real_rate<<16)/samplerate;
-	channel[ch].dds_acc=(chunksz+1)<<16; //to force the main thread to get new data
+	channel[ch].dds_acc=chunksz<<16; //to force the main thread to get new data
 	return 1;
 }
 
@@ -121,13 +122,14 @@ static void handle_cmd(sndmixer_cmd_t *cmd) {
 		int ch=find_free_channel();
 		if (ch<0) return; //no free channels
 		int r=0;
+		printf("Sndmixer: %d: initing source\n", cmd->id); 
 		if (cmd->cmd==CMD_QUEUE_WAV) {
 			r=init_source(ch, &sndmixer_source_wav, cmd->queue_file_start, cmd->queue_file_end);
 		} else if (cmd->cmd==CMD_QUEUE_MOD) {
 			r=init_source(ch, &sndmixer_source_mod, cmd->queue_file_start, cmd->queue_file_end);
 		}
 		if (!r) {
-			printf("Failed to start decoder for id %d\n", cmd->id);
+			printf("Sndmixer: Failed to start decoder for id %d\n", cmd->id);
 			return; //fail
 		}
 		channel[ch].id=cmd->id; //success; set ID
@@ -155,6 +157,7 @@ static void handle_cmd(sndmixer_cmd_t *cmd) {
 		} else if (cmd->cmd==CMD_PAUSE) {
 			channel[ch].flags|=CHFL_PAUSED;
 		} else if (cmd->cmd==CMD_STOP) {
+			printf("Sndmixer: %d: cleaning up source because of ext request\n", cmd->id); 
 			clean_up_channel(ch);
 		}
 	}
@@ -162,40 +165,48 @@ static void handle_cmd(sndmixer_cmd_t *cmd) {
 
 #define CHUNK_SIZE 64
 
+//Sound mixer main loop.
 static void sndmixer_task(void *arg) {
 	uint8_t mixbuf[CHUNK_SIZE];
 	printf("Sndmixer task up.\n");
 	while(1) {
+		//Handle any commands that are sent to us.
 		sndmixer_cmd_t cmd;
 		while(xQueueReceive(cmd_queue, &cmd, 0) == pdTRUE) {
 			handle_cmd(&cmd);
 		}
 
+		//Assemble CHUNK_SIZE worth of samples and dump it into the I2S subsystem.
 		for (int i=0; i<CHUNK_SIZE; i++) {
-			int s=0;
+			int s=0; //current sample value, multiplied by 256 (because of multiplies by channel volume)
 			for (int ch=0; ch<no_channels; ch++) {
 				if (channel[ch].source) {
-					channel[ch].dds_acc+=channel[ch].dds_rate;
+					//Channel is active.
+					channel[ch].dds_acc+=channel[ch].dds_rate; //select next sample
+					//dds_acc>>16 now gives us which sample to get from the buffer.
 					if ((channel[ch].dds_acc>>16)>=channel[ch].chunksz) {
-						//Need to fetch more data
+						//That value is outside the channels chunk buffer. Refill that first.
 						int r=channel[ch].source->fill_buffer(channel[ch].src_ctx, channel[ch].buffer);
 						if (r==0) {
 							//Source is done.
+							printf("Sndmixer: %d: cleaning up source because of EOF\n", channel[ch].id); 
 							clean_up_channel(ch);
 							continue;
 						}
-						channel[ch].dds_acc=0;
-						channel[ch].chunksz=r;
+						channel[ch].dds_acc-=(channel[ch].chunksz<<16); //reset dds acc; we have parsed chunksize samples.
+						channel[ch].chunksz=r; //save new chunksize
 					}
+					//Multiply by volume, add to cumulative sample
 					s+=channel[ch].buffer[channel[ch].dds_acc>>16]*channel[ch].volume;
 				}
 			}
 			//Bring back to -128-127. Volume did *256, channels did *no_channels.
 			s=(s/no_channels)>>8;
-			mixbuf[i]=s+128;
+			mixbuf[i]=s+128; //because samples are signed, mix_buf is unsigned
 		}
 		kchal_sound_push(mixbuf, CHUNK_SIZE);
 	}
+	//ToDo: de-init channels/buffers/... if we ever implement a deinit cmd
 	vTaskDelete(NULL);
 }
 
@@ -220,6 +231,8 @@ int sndmixer_init(int p_no_channels, int p_samplerate) {
 	}
 	return 1;
 }
+
+// The following functions all are essentially wrappers for the axt of pushing a command into the command queue.
 
 int sndmixer_queue_wav(const void *wav_start, const void *wav_end, int evictable) {
 	int id=new_id();
@@ -279,7 +292,6 @@ void sndmixer_pause(int id) {
 		.id=id,
 	};
 	xQueueSend(cmd_queue, &cmd, portMAX_DELAY);
-
 }
 
 void sndmixer_stop(int id) {
