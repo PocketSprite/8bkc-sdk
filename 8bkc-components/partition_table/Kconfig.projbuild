@@ -1,0 +1,12 @@
+#Stripped for PocketSprite use (real or fake)
+
+config PARTITION_TABLE_FILENAME
+       string
+       default partitions-pksp-fake.csv if !HW_POCKETSPRITE
+       default partitions-pksp-real.csv if HW_POCKETSPRITE
+
+config APP_OFFSET
+       hex
+       default 0x90000 if !HW_POCKETSPRITE
+       default 0x10000 # this is the factory app offset used by the default tables
+

@@ -44,7 +44,7 @@ int mod_fill_buffer(void *ctx, int8_t *buffer) {
 	mod_ctx_t *mod=(mod_ctx_t*)ctx;
 	int *samps=(int*)buffer;
 	int r=replay_get_audio(mod->replay, samps);
-	printf("Got %d samps from ibxm.\n", r);
+//	printf("Got %d samps from ibxm.\n", r);
 	for (int i=0; i<r; i++) {
 		int s=samps[i+1];
 		if (s>32767) s=32767;

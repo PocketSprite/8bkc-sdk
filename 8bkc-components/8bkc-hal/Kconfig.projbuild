@@ -1,8 +1,178 @@
-menu "8BKC hardware config"
+menu "PocketSprite hardware config"
 
-config SUPPORT_8BKC
+choice KC_HARDWARE
+	prompt "Hardware to compile binary for"
+	default HW_POCKETSPRITE
+	help
+		The PocketSprite HAL is also capable of running on some other boards, for easy development.
+		Select the details of the board here in case 
+
+config HW_POCKETSPRITE
+	bool "Real PocketSprite hardware"
+
+config HW_WROVERKIT_V1
+	bool "ESP_Wrover_Kit v1 (red PCB)"
+
+config HW_WROVERKIT_V2
+	bool "ESP_Wrover_Kit v2 or later (black PCB)"
+
+config HW_CUSTOM
+	bool "Custom hardware"
+
+endchoice
+
+choice HW_LCD_TYPE_SEL
+	prompt "LCD type"
+	depends on HW_CUSTOM || HW_WROVERKIT_V2
+
+config HW_LCD_TYPE_ILI
+	bool "ILI9341 LCD"
+
+config HW_LCD_TYPE_ST
+	bool "ST7789V LCD"
+
+endchoice
+
+config HW_WROVERKIT
 	bool
-	default y
-	select SPI_FLASH_WRITING_DANGEROUS_REGIONS_ALLOWED
+	default n if HW_POCKETSPRITE
+	default n if HW_CUSTOM
+	default y if HW_WROVERKIT_V1
+	default y if HW_WROVERKIT_V2
+
+
+config HW_LCD_TYPE
+	int
+	default 0 if HW_POCKETSPRITE
+	default 0 if HW_WROVERKIT_V1
+	default 0 if HW_LCD_TYPE_ILI
+	default 1 if HW_LCD_TYPE_ST
+
+
+config HW_LCD_MOSI_GPIO_CUST
+	int "LCD MOSI pin"
+	depends on HW_CUSTOM
+	range 0 32
+	default 25
+
+config HW_LCD_CLK_GPIO_CUST
+	int "LCD CLK pin"
+	depends on HW_CUSTOM
+	range 0 32
+	default 23
+
+config HW_LCD_CS_GPIO_CUST
+	int "LCD CS pin"
+	depends on HW_CUSTOM
+	range 0 32
+	default 19
+
+config HW_LCD_DC_GPIO_CUST
+	int "LCD DC pin"
+	depends on HW_CUSTOM
+	range 0 32
+	default 22
+
+config HW_LCD_RESET_GPIO_CUST
+	int "LCD RESET pin"
+	depends on HW_CUSTOM
+	range 0 32
+	default 21
+
+config HW_LCD_BL_GPIO_CUST
+	int "LCD Backlight Enable pin"
+	depends on HW_CUSTOM
+	range 0 32
+	default 5
+
+config HW_INV_BL_CUST
+	bool "Invert backlight output"
+	default n
+	depends on HW_CUSTOM
+
+
+config HW_INV_BL
+	bool
+	default HW_INBV_BL_CUST if HW_CUSTOM
+	default n if HW_WROVERKIT_V1
+	default y if HW_WROVERKIT_V2
+
+config HW_LCD_MISO_GPIO
+	int
+	default HW_LCD_MISO_GPIO_CUST if HW_CUSTOM
+	default 25 if HW_WROVERKIT
+
+config HW_LCD_MOSI_GPIO
+	int
+	default HW_LCD_MOSI_GPIO_CUST if HW_CUSTOM
+	default 23 if HW_WROVERKIT
+
+config HW_LCD_CLK_GPIO
+	int
+	default HW_LCD_CLK_GPIO_CUST if HW_CUSTOM
+	default 19 if HW_WROVERKIT
+
+config HW_LCD_CS_GPIO
+	int
+	default HW_LCD_CS_GPIO_CUST if HW_CUSTOM
+	default 22 if HW_WROVERKIT
+
+config HW_LCD_DC_GPIO
+	int
+	default HW_LCD_DC_GPIO_CUST if HW_CUSTOM
+	default 21 if HW_WROVERKIT
+
+config HW_LCD_RESET_GPIO
+	int
+	default HW_LCD_RESET_GPIO_CUST if HW_CUSTOM
+	default 18 if HW_WROVERKIT
+
+config HW_LCD_BL_GPIO
+	int
+	default HW_LCD_BL_GPIO_CUST if HW_CUSTOM
+	default 5 if HW_WROVERKIT
+
+
+choice HW_INPUT_SEL
+	prompt "Input method"
+	depends on !HW_POCKETSPRITE
+	help
+		If you use a non-PocketSprite board, you can use one of multiple methods to handle
+		the DPAD/start/select/A/B input. Select which one you want to use here.
+
+config HW_INPUT_PSX
+	bool "PlayStation 1/2 controller"
+
+config HW_INPUT_SERIAL
+	bool "Use serial console for input (limited - read docs)"
+
+endchoice
+
+
+config HW_PSX_CLK
+	int "PSX controller CLK GPIO pin"
+	depends on HW_INPUT_PSX
+	range 0 32
+	default 0
+
+config HW_PSX_DAT
+	int "PSX controller DATa GPIO pin. Note: needs 4K7 to Vcc"
+	depends on HW_INPUT_PSX
+	range 0 35
+	default 4
+
+config HW_PSX_ATT
+	int "PSX controller ATTention GPIO pin"
+	depends on HW_INPUT_PSX
+	range 0 32
+	default 27
+
+config HW_PSX_CMD
+	int "PSX controller CoMmanD GPIO pin"
+	depends on HW_INPUT_PSX
+	range 0 32
+	default 2
+
+
 
 endmenu

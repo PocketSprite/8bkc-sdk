@@ -461,10 +461,11 @@ void bootloader_main()
 #if CONFIG_FLASHMODE_QIO || CONFIG_FLASHMODE_QOUT
     bootloader_enable_qio_mode();
 #endif
+#if HW_POCKETSPRITE
 	if (!is_recovery_boot()) {
 		bootloader_write_protect_blocks();
 	}
-
+#endif
     if (bootloader_flash_read(ESP_BOOTLOADER_OFFSET, &fhdr,
                               sizeof(esp_image_header_t), true) != ESP_OK) {
         ESP_LOGE(TAG, "failed to load bootloader header!");

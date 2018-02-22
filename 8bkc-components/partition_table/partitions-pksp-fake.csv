@@ -1,0 +1,6 @@
+# Name,   Type, SubType, Offset,  Size
+appfs,    0x43,   3,     0x010000, 0x070000
+nvs,      data, nvs,     0x080000, 0x010000
+#Actually, app under test goes here on the fake pocketsprite, not the chooser.
+chooser,  app,  factory, 0x090000, 0x360000
+coredump, data, coredump,0x3F0000, 0x010000

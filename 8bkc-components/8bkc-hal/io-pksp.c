@@ -11,7 +11,7 @@
 #include "driver/spi_master.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "io.h"
+#include "io-pksp.h"
 #include "ssd1331.h"
 #include "esp_deep_sleep.h"
 #include "driver/rtc_io.h"

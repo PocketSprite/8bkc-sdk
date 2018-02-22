@@ -10,3 +10,11 @@
 COMPONENT_ADD_INCLUDEDIRS := include
 COMPONENT_PRIV_INCLUDEDIRS := include-private
 
+COMPONENT_OBJS := hexdump.o kcugui.o
+
+ifdef CONFIG_HW_POCKETSPRITE
+COMPONENT_OBJS += io-pksp.o kchal-pksp.o ssd1331.c
+else
+COMPONENT_OBJS += kchal-fake.o spi_lcd.o psxcontroller.o
+endif
+
