@@ -87,38 +87,67 @@ static volatile uint16_t buttons=0xff;
 	//On the real pocketsprite, this handles battery etc. On the 'fake' one, this handles
 	//the input.
 #if CONFIG_HW_INPUT_PSX
-/*
-#define KC_BTN_RIGHT (1<<0)
-#define KC_BTN_LEFT (1<<1)
-#define KC_BTN_UP (1<<2)
-#define KC_BTN_DOWN (1<<3)
-#define KC_BTN_START (1<<4)
-#define KC_BTN_SELECT (1<<5)
-#define KC_BTN_A (1<<6)
-#define KC_BTN_B (1<<7)
-#define KC_BTN_POWER (1<<8)
-#define KC_BTN_POWER_LONG (1<<9)
-*/
-
-
 static void kchal_mgmt_task(void *args) {
-	//r, l, u, d, start, sel, a, b, power
+	//Order of (PocketSprite) keys as array indices: r, l, u, d, start, sel, a, b, power
 	//psx mapping: a=circle, b=X, power=triangle
 	const uint16_t btns[8]={
 		0x20, 0x80, 0x10, 0x40, 0x8, 0x1, 0x2000, 0x4000, 0x1000
 	};
 	psxcontrollerInit();
 	while(1) {
-		uint16_t b=psxReadInput();
+		uint16_t b=psxReadInput(); //warning: this returns 1s for *non*pressed buttons.
 		uint16_t tb=0;
 		for (int i=0; i<8; i++) {
-			if (b&btns[i]) tb|=(1<<i);
+			if ((b&btns[i])==0) tb|=(1<<i);
 		}
 		buttons=tb;
 		//if (b!=0xffff) printf("btn %x\n", ~b);
-		vTaskDelay(1);
+		vTaskDelay(100/portTICK_PERIOD_MS);
 	}
 }
+#else
+
+//User serial port input as input
+static void kchal_mgmt_task(void *args) {
+	printf("Using serial port for input.\n");
+	printf("Use arrow keys or JIKL for D-pad.\n");
+	printf("Use A, S for A, B buttons.\n");
+	printf("Use Z for start, X for select, P for power.\n");
+	int ansi_escaped=0;
+	int b;
+	while(1) {
+		b=0;
+		while(1) {
+			int c=getchar();
+			if (c==-1) break;
+			if (ansi_escaped==0 && c=='\033') {
+				ansi_escaped++;
+			} else if (ansi_escaped==1 && c=='[') {
+				ansi_escaped++;
+			} else if (ansi_escaped==2) {
+				if (c=='A') b=KC_BTN_UP;
+				if (c=='B') b=KC_BTN_DOWN;
+				if (c=='D') b=KC_BTN_LEFT;
+				if (c=='C') b=KC_BTN_RIGHT;
+				ansi_escaped=0;
+			} else {
+				ansi_escaped=0;
+				if (c=='a') b=KC_BTN_A;
+				if (c=='s') b=KC_BTN_B;
+				if (c=='z') b=KC_BTN_START;
+				if (c=='x') b=KC_BTN_SELECT;
+				if (c=='j') b=KC_BTN_LEFT;
+				if (c=='i') b=KC_BTN_UP;
+				if (c=='k') b=KC_BTN_DOWN;
+				if (c=='l') b=KC_BTN_RIGHT;
+				if (c=='p') b=KC_BTN_POWER;
+			}
+		}
+		buttons=b;
+		vTaskDelay(100/portTICK_PERIOD_MS);
+	}
+}
+
 #endif
 
 #define INIT_HW_DONE 1
