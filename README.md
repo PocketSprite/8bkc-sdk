@@ -12,3 +12,5 @@ tile-based renderer can have their APIs changed at any time.
 USING THIS
 ----------
 Errm... this needs to be written.
+
+[![Documentation Status](https://readthedocs.org/projects/pocketsprite-sdk/badge/?version=latest)](http://pocketsprite-sdk.readthedocs.io/en/latest/?badge=latest)
