@@ -14,7 +14,7 @@ void ssd1331SetContrast(int ctr) {
 	ioOledSend(sendCmd, sizeof(sendCmd), 0);
 }
 
-void ssd1331SendFB(uint16_t *fb, int xs, int ys, int w, int h) {
+void ssd1331SendFB(const uint16_t *fb, int xs, int ys, int w, int h) {
 	//cmd, start col, end col, cmd, start row, end row, send data
 	char sendCmd[]={0x15, xs, xs+w-1, 0x75, ys, ys+h-1, 0x2C};
 	ioOledSend(sendCmd, sizeof(sendCmd), 0);
@@ -22,7 +22,7 @@ void ssd1331SendFB(uint16_t *fb, int xs, int ys, int w, int h) {
 }
 
 void ssd1331Init() {
-	char initSeq[]={
+	char initSeq[]={ //note: not const char becauuse this is transfered using DMA
 		0xFD, 0x12,
 		0xAE, 0x81, 0x91, 0x82, 0x50, 0x83, 0x7D,
 		0x87, 0x06, 0x8A, 0x64, 0x8B, 0x78, 0x8C, 0x64,

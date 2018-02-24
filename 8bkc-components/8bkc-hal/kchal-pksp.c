@@ -305,13 +305,13 @@ uint32_t kchal_get_keys() {
 	return ioJoyReadInput();
 }
 
-void kchal_send_fb(void *fb) {
+void kchal_send_fb(const uint16_t *fb) {
 	xSemaphoreTake(oledMux, portMAX_DELAY);
 	ssd1331SendFB(fb, OLED_FAKE_XOFF, OLED_FAKE_YOFF, OLED_FAKE_W, OLED_FAKE_H);
 	xSemaphoreGive(oledMux);
 }
 
-void kchal_send_fb_partial(void *fb, int x, int y, int h, int w) {
+void kchal_send_fb_partial(const uint16_t *fb, int x, int y, int h, int w) {
 	if (w<=0 || h<=0) return;
 	if (x<0 || x+w>OLED_FAKE_W) return;
 	if (y<0 || y+h>OLED_FAKE_H) return;

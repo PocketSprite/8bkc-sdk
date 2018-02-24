@@ -81,7 +81,7 @@ int ioGetVbatAdcVal() {
 	return sum/VBATMEAS_HISTCT;
 }
 
-void ioOledSend(char *data, int count, int dc) {
+void ioOledSend(const char *data, int count, int dc) {
 	esp_err_t ret;
 	spi_transaction_t t;
 	if (count==0) return;             //no need to send anything

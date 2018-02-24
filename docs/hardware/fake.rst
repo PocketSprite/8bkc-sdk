@@ -8,9 +8,10 @@ compilation for 'fake' PocketSprite hardware. For this, you need:
 - An ESP32 devboard with at least 4MiB of flash
 - A display with an ILI9341 or ST7789V controller
 
-(The Espresif ESP32-Wrover-Kit devboards have displays like this.)
+(The Espressif ESP32-Wrover-Kit devboards have displays like this.)
 
 Optionally, but highly recommended are:
+
 - A small amplifier plus speaker to amplify the sound signal on GPIO26
 - A PlayStation 1/2/PSX controller
 
@@ -34,6 +35,7 @@ Limitations
 -----------
 
 The 'fake' mode has some things that are not implemented:
+
  - No appfs, so no filesystem to load external files from. The app binary itself is all you have access to.
  - No chooser. The devboard will boot immediately into your app. HAL API calls to return to chooser will result in
    a program abort.

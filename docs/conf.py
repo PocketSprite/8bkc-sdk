@@ -20,6 +20,28 @@
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
+import sys, os
+import re
+from subprocess import call, Popen, PIPE
+import shlex
+
+# If extensions (or modules to document with autodoc) are in another directory,
+# add these directories to sys.path here. If the directory is relative to the
+# documentation root, use os.path.abspath to make it absolute, like shown here.
+sys.path.insert(0, os.path.abspath('.'))
+
+from repo_util import run_cmd_get_output
+
+# Call Doxygen to get XML files from the header files
+print "Calling Doxygen to generate latest XML files"
+call('doxygen')
+# Generate 'api_name.inc' files using the XML files by Doxygen
+os.system("python gen-dxd.py")
+
+# http://stackoverflow.com/questions/12772927/specifying-an-online-image-in-sphinx-restructuredtext-format
+# 
+suppress_warnings = ['image.nonlocal_uri']
+
 
 # -- General configuration ------------------------------------------------
 
@@ -30,7 +52,11 @@
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = []
+extensions = ["breathe", "link-roles"]
+
+# Breathe extension variables
+breathe_projects = { "8bkc": "xml/" }
+breathe_default_project = "8bkc"
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -79,10 +105,6 @@ todo_include_todos = False
 
 # -- Options for HTML output ----------------------------------------------
 
-# The theme to use for HTML and HTML Help pages.  See the documentation for
-# a list of builtin themes.
-#
-html_theme = 'alabaster'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -164,5 +186,19 @@ texinfo_documents = [
      'Miscellaneous'),
 ]
 
+
+
+# -- Use sphinx_rtd_theme for local builds --------------------------------
+# ref. https://github.com/snide/sphinx_rtd_theme#using-this-theme-locally-then-building-on-read-the-docs
+#
+# on_rtd is whether we are on readthedocs.org
+on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
+
+if not on_rtd:  # only import and set the theme if we're building docs locally
+    import sphinx_rtd_theme
+    html_theme = 'sphinx_rtd_theme'
+    html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+
+# otherwise, readthedocs.org uses their theme by default, so no need to specify it
 
 

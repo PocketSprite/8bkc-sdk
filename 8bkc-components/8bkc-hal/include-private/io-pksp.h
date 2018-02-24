@@ -8,7 +8,7 @@
 
 
 
-void ioOledSend(char *data, int count, int dc);
+void ioOledSend(const char *data, int count, int dc);
 int ioJoyReadInput();
 void ioInit();
 void ioPowerDown();
