@@ -183,6 +183,7 @@ void appfsEntryInfo(appfs_handle_t fd, const char **name, int *size);
  *
  * @param fd File descriptor returned by previous call, or APPFS_INVALID_FD to get the first file descriptor
  * @return Next file descriptor, or APPFS_INVALID_FD if all files have been enumerated
+ */
 appfs_handle_t appfsNextEntry(appfs_handle_t fd);
 
 /**
