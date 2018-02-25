@@ -4,28 +4,44 @@ TileGFX: A small tile-based renderer engine for the PocketSprite.
 #pragma once
 #include <stdint.h>
 
+/**
+ * @brief Structure describing one frame of animation
+ */
 typedef struct {
-	uint16_t delay_ms; //Delay for one frame. On the 0th frame of a seq, this indicates total duration.
-	uint16_t tile; //Tile index for frame. 0xffff on 0th frame of a seq.
+	uint16_t delay_ms;	/*!< Delay for one frame. On the 0th frame of a seq, this indicates total duration. */
+	uint16_t tile;		/*!< Tile index for frame. 0xffff on 0th frame of a seq. */
 } tilegfx_anim_frame_t;
 
+/**
+ * @brief Structure describing a set of tiles, usable in a tilemap.
+ */
 typedef struct {
-	int trans_col; //transparent color, or -1 if none
-	const uint16_t *anim_offsets; //Offsets into the frames array. Indexed by tile index.
-	const tilegfx_anim_frame_t *anim_frames;
-	const uint16_t tile[];
+	int trans_col;					/*!< transparent color, or -1 if none */
+	const uint16_t *anim_offsets;	/*!< Array of offsets into the animation frames array. Indexed by tile index. */
+									/*!< If a tile is animated, it will have an offset number in this array at its  */
+									/*!< index. That offset is 0xffff if no animation. */
+	const tilegfx_anim_frame_t *anim_frames; /*< Pointer to array describing the various animations in the tileset */
+	const uint16_t tile[];			/*!< Raw tile data. Each tile is 64 16-bit words worth of graphics data. */
 } tilegfx_tileset_t;
 
+/**
+ * @brief Structure describing a tilemap
+ */
 typedef struct {
-	int h;
-	int w;
-	const tilegfx_tileset_t *gfx;
-	const uint16_t tiles[];
+	int h;							/*!< Height of the tilemap, in tiles */
+	int w;							/*!< Width of the tilemap, in tiles */
+	const tilegfx_tileset_t *gfx;	/*!< Pointer to the tileset used in the map */
+	const uint16_t tiles[];			/*!< Array of the tiles in the map. Values can be 0xffff for no tile. */
 } tilegfx_map_t;
 
+/**
+ * @brief Structure describing a rectangle
+ */
 typedef struct {
-	int x, y;
-	int w, h;
+	int x; /*!< Position of left side of rectangle */
+	int y; /*!< Position of top of rectangle */
+	int w; /*!< Width of rectangle */
+	int h; /*!< Height of rectangle */
 } tilegfx_rect_t;
 
 /**

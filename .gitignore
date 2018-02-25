@@ -4,3 +4,4 @@ docs/sphinx-warning-log.txt
 docs/sphinx-warning-log-sanitized.txt
 docs/xml/
 docs/man/
+docs/*.pyc

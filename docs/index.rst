@@ -5,6 +5,7 @@ Welcome to PocketSprite SDK's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   Getting Started <gettingstarted/index>
    Hardware <hardware/index>
    Apis <api/index>
 

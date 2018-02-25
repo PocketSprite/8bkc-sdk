@@ -24,7 +24,8 @@ INPUT = \
 	../8bkc-components/8bkc-hal/include/8bkc-hal.h \
 	../8bkc-components/8bkc-hal/include/8bkc-ugui.h \
 	../8bkc-components/sndmixer/sndmixer.h \
-	../8bkc-components/tilegfx/tilegfx.h
+	../8bkc-components/tilegfx/tilegfx.h \
+	../8bkc-components/appfs/include/appfs.h
 
 ## Get warnings for functions that have no documentation for their parameters or return value
 ##

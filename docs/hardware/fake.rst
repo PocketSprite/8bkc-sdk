@@ -36,9 +36,12 @@ Limitations
 
 The 'fake' mode has some things that are not implemented:
 
- - No appfs, so no filesystem to load external files from. The app binary itself is all you have access to.
+ - No appfs, so no filesystem to load external files from. The app binary itself is all you have access to. This
+   is done to make the development system fit into the 4MiB flash that most devboards come with.
  - No chooser. The devboard will boot immediately into your app. HAL API calls to return to chooser will result in
    a program abort.
  - No powerdown/poweroff features. HAL API calls for this will result in a program abort
  - No battery monitoring features. Battery voltage will always be reported as 3.6V.
 
+(Note: These limitiations also mean that the GB/SMS emulators can be cross-compiled to a devboard, but they will
+not be able to load any ROMs due to lack of an AppFs filesystem.)

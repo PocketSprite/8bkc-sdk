@@ -5,13 +5,13 @@
  * @brief Structure describing a sound source
  */
 typedef struct {
-	//Initialize the sound source. Returns size of data returned per call of fill_buffer.
+	/*! Initialize the sound source. Returns size of data returned per call of fill_buffer. */
 	int (*init_source)(const void *data_start, const void *data_end, int req_sample_rate, void **ctx);
-	//Get the actual sample rate the source returns data at
+	/*! Get the actual sample rate at which the source returns data */
 	int (*get_sample_rate)(void *ctx);
-	//Decode a bufferful of data. Returns 0 when file ended or something went wrong. Returns amount of bytes in buffer (normally what init_source returned) otherwise.
+	/*! Decode a bufferful of data. Returns 0 when file ended or something went wrong. Returns amount of bytes in buffer (normally what init_source returned) otherwise. */
 	int (*fill_buffer)(void *ctx, int8_t *buffer);
-	//Destroy source, free resources
+	/*! Destroy source, free resources */
 	void (*deinit_source)(void *ctx);
 } sndmixer_source_t;
 
@@ -98,7 +98,6 @@ void sndmixer_pause(int id);
  * @param id ID of the sound, obtained when queueing it
  */
 void sndmixer_stop(int id);
-
 
 /**
  * @brief Pause all playing sounds
