@@ -12,7 +12,7 @@
 #include "driver/dac.h"
 #include "soc/rtc_cntl_reg.h"
 #include "8bkc-hal.h"
-#include "io.h"
+#include "io-pksp.h"
 #include "ssd1331.h"
 #include "appfs.h"
 #include "8bkc-ugui.h"
@@ -184,7 +184,7 @@ static void show_bat_empty_icon() {
 		kcugui_cls();
 		UG_FontSelect(&FONT_6X8);
 		UG_SetForecolor(C_WHITE);
-		uint8_t *p=batEmptyIcon;
+		const uint8_t *p=batEmptyIcon;
 		for (int y=0; y<12; y++) {
 			for (int x=0; x<32; x++) {
 				UG_DrawPixel(x+(80-32)/2, y+(64-12)/2, cols[i&1][*p++]);
@@ -272,7 +272,7 @@ void kchal_init_sdk() {
 	appfs_handle_t thisApp;
 	r=appfsGetCurrentApp(&thisApp);
 	if (r==ESP_OK) {
-		char *name;
+		const char *name;
 		appfsEntryInfo(thisApp, &name, NULL);
 		printf("Opening NVS storage for app %s\n", name);
 		r=nvs_open(name, NVS_READWRITE, &nvsAppHandle);
