@@ -17,10 +17,23 @@ static uint16_t *fb;
 static tilegfx_rect_t fb_rect={0};
 static uint64_t anim_start_time;
 
+//Set this to 1 to check all writes to the framebuffer. If a tile rendering function contains an error leading
+//to writes outside of the framebuffer, enabling this will cause an abort when that happens.
+#define DEBUG_WRITES 0
+
+#if !DEBUG_WRITES
+#define CHECK_OOB_WRITE(addr)
+#else
+#define CHECK_OOB_WRITE(addr) do if (addr<fb || addr>=&fb[fb_rect.h*fb_rect.w]) abort(); while(0)
+#endif
+
+
 //Render a tile that is not clipped by the screen extremities
 static void render_tile_full(uint16_t *dest, const uint16_t *tile, int trans_col) {
 	if (trans_col==-1) {
 		for (int y=0; y<8; y++) {
+			CHECK_OOB_WRITE(&dest[0]);
+			CHECK_OOB_WRITE(&dest[7]);
 			memcpy(dest, tile, 8*2);
 			tile+=8;
 			dest+=fb_rect.w;
@@ -28,7 +41,10 @@ static void render_tile_full(uint16_t *dest, const uint16_t *tile, int trans_col
 	} else {
 		for (int y=0; y<8; y++) {
 			for (int x=0; x<8; x++) {
-				if (tile[x]!=trans_col) dest[x]=tile[x];
+				if (tile[x]!=trans_col) {
+					CHECK_OOB_WRITE(&dest[x]);
+					dest[x]=tile[x];
+				}
 			}
 			tile+=8;
 			dest+=fb_rect.w;
@@ -37,11 +53,16 @@ static void render_tile_full(uint16_t *dest, const uint16_t *tile, int trans_col
 }
 
 //Render a tile that is / may be clipped by the screen extremities
+//Argument clip is the clipping region in screen coordinates. Xstart/Ystart indicates the upper left corner of
+//the tile; this may be outside of the clipping region.
 static void render_tile_part(uint16_t *dest, const uint16_t *tile, int xstart, int ystart, const tilegfx_rect_t *clip, int trans_col) {
 	for (int y=0; y<8; y++) {
-		if (y+ystart>=clip->x && y+ystart<clip->y+clip->h) {
+		if (y+ystart>=clip->y && y+ystart<clip->y+clip->h) {
 			for (int x=0; x<8; x++) {
-				if (x+xstart>=clip->y && x+xstart<clip->x+clip->w && tile[x]!=trans_col) dest[x]=tile[x];
+				if (x+xstart>=clip->x && x+xstart<clip->x+clip->w && tile[x]!=trans_col) {
+					CHECK_OOB_WRITE(&dest[x]);
+					dest[x]=tile[x];
+				}
 			}
 		}
 		tile+=8;
@@ -114,7 +135,7 @@ void tilegfx_tile_map_render(const tilegfx_map_t *tiles, int offx, int offy, con
 			if (tileno!=0xffff) {
 				if (x < dest->x || y < dest->y || x+7 >= dest->x+dest->w || y+7 >= dest->y+dest->h) {
 					render_tile_part(pp, &tiles->gfx->tile[get_tile_idx(tiles, tileno)*64], 
-								x - dest->x, y - dest->y, dest, tiles->gfx->trans_col);
+								x, y, dest, tiles->gfx->trans_col);
 				} else {
 					render_tile_full(pp, &tiles->gfx->tile[get_tile_idx(tiles, tileno)*64], tiles->gfx->trans_col);
 				}
@@ -147,6 +168,7 @@ int tilegfx_init(int doublesize, int hz) {
 	fb=malloc(fb_rect.w*fb_rect.h*2);
 	if (!fb) goto err;
 	vbl_sema=xSemaphoreCreateBinary();
+	if (!vbl_sema) goto err;
 	const esp_timer_create_args_t args={
 		.callback=vbl_cb,
 		.arg=NULL,
@@ -210,6 +232,7 @@ void undo_x2_scaling() {
 			int g=(((p>>21)&0x3F)+((p>>5)&0x3F))/2;
 			int b=(((p>>16)&0x1F)*1+((p>>0)&0x1f)*3)/4;
 			uint16_t c=(r<<11)+(g<<5)+(b<<0);
+			CHECK_OOB_WRITE(fbp);
 			*fbp++=(c<<8)|(c>>8);
 			fbw++;
 		}
