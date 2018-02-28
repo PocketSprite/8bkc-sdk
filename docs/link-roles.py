@@ -15,7 +15,7 @@ def get_github_rev():
 
 
 def setup(app):
-    baseurl = 'https://github.com/espressif/esp-idf'
+    baseurl = 'https://github.com/PocketSprite/8bkc-sdk'
     rev = get_github_rev()
     app.add_role('idf', autolink('{}/tree/{}/%s'.format(baseurl, rev)))
     app.add_role('idf_file', autolink('{}/blob/{}/%s'.format(baseurl, rev)))
