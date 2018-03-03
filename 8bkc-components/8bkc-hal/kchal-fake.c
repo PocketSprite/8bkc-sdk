@@ -163,6 +163,21 @@ void kchal_init_hw() {
 	if (initstate&INIT_HW_DONE) return; //already did this
 	oledMux=xSemaphoreCreateMutex();
 	configMux=xSemaphoreCreateMutex();
+	//Route DAC
+	i2s_set_pin(0, NULL);
+	i2s_set_dac_mode(I2S_DAC_CHANNEL_LEFT_EN);
+	//I2S enables *both* DAC channels; we only need DAC2. Do some Deeper Magic to make this into
+	//an essentially uninitialized GPIO pin again.
+	CLEAR_PERI_REG_MASK(RTC_IO_PAD_DAC1_REG, RTC_IO_PDAC1_DAC_XPD_FORCE_M);
+	CLEAR_PERI_REG_MASK(RTC_IO_PAD_DAC1_REG, RTC_IO_PDAC1_XPD_DAC_M);
+	gpio_config_t io_conf={
+		.intr_type=GPIO_INTR_DISABLE,
+		.mode=GPIO_MODE_INPUT,
+		.pull_up_en=1,
+		.pin_bit_mask=(1<<25)
+	};
+	gpio_config(&io_conf);
+
 	//Initialize display
 	spi_lcd_init();
 	//Clear entire OLED screen
@@ -278,19 +293,7 @@ void kchal_sound_start(int rate, int buffsize) {
 		.dma_buf_len=buffsize/4
 	};
 	i2s_driver_install(0, &cfg, 4, &soundQueue);
-	i2s_set_pin(0, NULL);
-	i2s_set_dac_mode(I2S_DAC_CHANNEL_LEFT_EN);
 	i2s_set_sample_rates(0, cfg.sample_rate);
-	//I2S enables *both* DAC channels; we only need DAC2.
-	CLEAR_PERI_REG_MASK(RTC_IO_PAD_DAC1_REG, RTC_IO_PDAC1_DAC_XPD_FORCE_M);
-	CLEAR_PERI_REG_MASK(RTC_IO_PAD_DAC1_REG, RTC_IO_PDAC1_XPD_DAC_M);
-	gpio_config_t io_conf={
-		.intr_type=GPIO_INTR_DISABLE,
-		.mode=GPIO_MODE_INPUT,
-		.pull_up_en=1,
-		.pin_bit_mask=(1<<25)
-	};
-	gpio_config(&io_conf);
 	soundRunning=1;
 }
 
