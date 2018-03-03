@@ -111,6 +111,13 @@ int load_tileset(xmlNode *tileset, char *designator, char **name) {
 		fprintf(stderr, "Tile set %s ignored: need to be 8x8!\n");
 		goto err;
 	}
+	//See if the name is already in the linked list for the tiles
+	for (tmx_llitem_t *t=tmxinfo; t!=NULL; t=t->next) {
+		if (strcmp(tnames, t->tilename)==0) {
+			//we already have this tileset
+			return;
+		}
+	}
 	*name=strdup(tnames);
 	conv_to_c_ident(*name);
 	char *tcs=xmlGetProp(tileset, "tilecount");
@@ -254,7 +261,7 @@ int write_map(xmlDoc *doc, xmlNode *layer, char *file, char *designator) {
 	sprintf(name, "%s_%s", filebase, mn);
 	conv_to_c_ident(name);
 	tmx_llitem_t *i=tmxinfo;
-	while (i!=NULL && strcmp(file, i->tmxname)!=0) i-i->next;
+	while (i!=NULL && strcmp(file, i->tmxname)!=0) i=i->next;
 	if (i==NULL) goto err;
 
 	int h=atoi(mh);
@@ -336,12 +343,12 @@ int parse_tmx_file(char *f, int step) {
 			if (!xmlStrcmp(child->name, "tileset")) {
 				char *name;
 				int r=load_tileset(child, f, &name);
+				if (!r) goto err;
 				tmx_llitem_t *i=malloc(sizeof(tmx_llitem_t));
 				i->tmxname=strdup(f);
 				i->tilename=name;
 				i->next=tmxinfo;
 				tmxinfo=i;
-				if (!r) goto err;
 			}
 			child=child->next;
 		}
@@ -390,7 +397,6 @@ int main(int argc, char **argv) {
 		int r=parse_tmx_file(argv[i], STEP_TILES);
 		if (!r) exit(1);
 	}
-
 	for (int i=3; i<argc; i++) {
 		int r=parse_tmx_file(argv[i], STEP_MAP);
 		if (!r) exit(1);
