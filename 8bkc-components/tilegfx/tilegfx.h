@@ -124,7 +124,7 @@ tilegfx_map_t *tilegfx_create_tilemap(int w, int h, const tilegfx_tileset_t *til
  * @param orig Tilemap to duplicate
  * @return Duplicated tilemap, or NULL if out of memory
  */
-tilegfx_map_t tilegfx_dup_tilemap(const tilegfx_map_t *orig);
+tilegfx_map_t *tilegfx_dup_tilemap(const tilegfx_map_t *orig);
 
 
 /**

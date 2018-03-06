@@ -279,7 +279,7 @@ tilegfx_map_t *tilegfx_create_tilemap(int w, int h, const tilegfx_tileset_t *til
 	ret->w=w;
 	ret->h=h;
 	ret->gfx=tiles;
-	memset(ret->tiles, 0xff, h*w*2);
+	memset((void*)ret->tiles, 0xff, h*w*2);
 	return ret;
 }
 
@@ -288,9 +288,9 @@ void tilegfx_destroy_tilemap(tilegfx_map_t *map) {
 	free(map);
 }
 
-tilegfx_map_t tilegfx_dup_tilemap(const tilegfx_map_t *orig) {
-	tilegfx_map_t *ret=tilegfx_create_tilemap(orig->h, orig->w);
+tilegfx_map_t *tilegfx_dup_tilemap(const tilegfx_map_t *orig) {
+	tilegfx_map_t *ret=tilegfx_create_tilemap(orig->h, orig->w, orig->gfx);
 	if (!ret) return NULL;
-	memcpy(ret->tiles, orig->tiles, ret->h*ret->w*2);
+	memcpy((void*)ret->tiles, orig->tiles, ret->h*ret->w*2);
 	return ret;
 }
