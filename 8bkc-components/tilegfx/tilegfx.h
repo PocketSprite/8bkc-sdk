@@ -103,3 +103,62 @@ void tilegfx_tile_map_render(const tilegfx_map_t *tiles, int offx, int offy, con
 void tilegfx_fade(uint8_t r, uint8_t g, uint8_t b, uint8_t pct);
 
 
+/**
+ * @brief Create an empty tilemap in RAM
+ *
+ * This can be used to generate a tilemap that is in RAM and this modifiable from the code
+ *
+ * @param w Width, in tiles, of the map
+ * @param h Height, in tiles, of the map
+ * @param tiles Tileset the map will use
+ * @return The map (with all tiles set to 0xffff/transparent), or NULL if out of memory
+ */
+tilegfx_map_t *tilegfx_create_tilemap(int w, int h, const tilegfx_tileset_t *tiles);
+
+
+/**
+ * @brief Create an editable copy of a tilemap
+ *
+ * Use this to duplicate a tilemap located into flash into one located into RAM.
+ *
+ * @param orig Tilemap to duplicate
+ * @return Duplicated tilemap, or NULL if out of memory
+ */
+tilegfx_map_t tilegfx_dup_tilemap(const tilegfx_map_t *orig);
+
+
+/**
+ * @brief Free a tilemap created with tilegfx_create_tilemap or tilegfx_dup_tilemap
+ *
+ * @param map Map to free
+ */
+void tilegfx_destroy_tilemap(tilegfx_map_t *map);
+
+
+/**
+ * @brief Set tile position in RAM-allocated map to the specific tile in its associated tileset
+ *
+ * @param map Tilemap to modify
+ * @param x X-position of tile to change
+ * @param y Y-position of tile to change
+ * @param tile Tile index to change to (or 0xffff for completely transparent)
+ */
+static inline void tilegfx_set_tile(tilegfx_map_t *map, int x, int y, uint16_t tile) {
+	//Cast to non-const... kind-of yucky but this is the least invasive way to do this.
+	uint16_t *t=(uint16_t*)&map->tiles[x+(y*map->w)];
+	*t=tile;
+}
+
+/**
+ * @brief Get tile in specified tile position of tilemap
+ *
+ * @param map Tilemap to read
+ * @param x X-position of tile
+ * @param y Y-position of tile
+ * @return tile Tile index in tileset (or 0xffff for completely transparent)
+ */
+static inline uint16_t tilegfx_get_tile(const tilegfx_map_t *map, int x, int y) {
+	return map->tiles[x+y*map->w];
+}
+
+

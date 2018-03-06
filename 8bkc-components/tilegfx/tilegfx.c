@@ -74,7 +74,7 @@ static int get_tile_idx(const tilegfx_map_t *tiles, int idx) {
 	if (tiles->gfx->anim_offsets==NULL) return idx;
 	int off=tiles->gfx->anim_offsets[idx];
 	if (off==0xffff) return idx;
-	tilegfx_anim_frame_t *f=&tiles->gfx->anim_frames[off];
+	const tilegfx_anim_frame_t *f=&tiles->gfx->anim_frames[off];
 	uint64_t t_ms=(esp_timer_get_time()-anim_start_time)/1000;
 	t_ms=t_ms%f->delay_ms; //first frame is total cycle len
 	while(t_ms) {
@@ -273,3 +273,24 @@ void tilegfx_flush() {
 	xSemaphoreTake(vbl_sema, portMAX_DELAY);
 }
 
+tilegfx_map_t *tilegfx_create_tilemap(int w, int h, const tilegfx_tileset_t *tiles) {
+	tilegfx_map_t *ret=malloc(sizeof(tilegfx_map_t)+h*w*2);
+	if (!ret) return NULL;
+	ret->w=w;
+	ret->h=h;
+	ret->gfx=tiles;
+	memset(ret->tiles, 0xff, h*w*2);
+	return ret;
+}
+
+
+void tilegfx_destroy_tilemap(tilegfx_map_t *map) {
+	free(map);
+}
+
+tilegfx_map_t tilegfx_dup_tilemap(const tilegfx_map_t *orig) {
+	tilegfx_map_t *ret=tilegfx_create_tilemap(orig->h, orig->w);
+	if (!ret) return NULL;
+	memcpy(ret->tiles, orig->tiles, ret->h*ret->w*2);
+	return ret;
+}
