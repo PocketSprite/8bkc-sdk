@@ -60,7 +60,7 @@ void kchal_init_hw();
 /**
  * @brief Initialize PocketSprite SDK and hardware
  *
- *
+ * 
  * Before calling any of the other SDK functions, this function should normally be called. It 
  * essentially combines kchal_init_sdk() and kchal_init(). Please call this early in your apps
  * main function.

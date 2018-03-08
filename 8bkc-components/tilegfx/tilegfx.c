@@ -289,7 +289,7 @@ void tilegfx_destroy_tilemap(tilegfx_map_t *map) {
 }
 
 tilegfx_map_t *tilegfx_dup_tilemap(const tilegfx_map_t *orig) {
-	tilegfx_map_t *ret=tilegfx_create_tilemap(orig->h, orig->w, orig->gfx);
+	tilegfx_map_t *ret=tilegfx_create_tilemap(orig->w, orig->h, orig->gfx);
 	if (!ret) return NULL;
 	memcpy((void*)ret->tiles, orig->tiles, ret->h*ret->w*2);
 	return ret;

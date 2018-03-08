@@ -145,7 +145,7 @@ void tilegfx_destroy_tilemap(tilegfx_map_t *map);
  */
 static inline void tilegfx_set_tile(tilegfx_map_t *map, int x, int y, uint16_t tile) {
 	//Cast to non-const... kind-of yucky but this is the least invasive way to do this.
-	uint16_t *t=(uint16_t*)&map->tiles[x+(y*map->w)];
+	uint16_t *t=(uint16_t*)&map->tiles[x+y*map->w];
 	*t=tile;
 }
 

@@ -281,6 +281,7 @@ void kchal_init_sdk() {
 		}
 	} else {
 		printf("No app running; factory app?\n");
+		r=nvs_open("factoryapp", NVS_READWRITE, &nvsAppHandle);
 	}
 
 
