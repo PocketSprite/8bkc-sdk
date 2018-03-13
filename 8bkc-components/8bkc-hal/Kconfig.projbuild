@@ -31,6 +31,9 @@ config HW_LCD_TYPE_ILI
 config HW_LCD_TYPE_ST
 	bool "ST7789V LCD"
 
+config HW_LCD_TYPE_ST7735R
+	bool "ST7735R"
+
 endchoice
 
 config HW_WROVERKIT
@@ -47,8 +50,16 @@ config HW_LCD_TYPE
 	default 0 if HW_WROVERKIT_V1
 	default 0 if HW_LCD_TYPE_ILI
 	default 1 if HW_LCD_TYPE_ST
+	default 2 if HW_LCD_TYPE_ST7735R
 
-
+config LCD_ROTATED
+	bool "LCD Rotate CCW 90"
+	default n
+	depends on HW_LCD_TYPE_ST7735R
+	help
+		This will rotate the displayed image CCW by 90 degrees
+		This can make any sub-pixel scaling look terrible so leave off
+	
 config HW_LCD_MOSI_GPIO_CUST
 	int "LCD MOSI pin"
 	depends on HW_CUSTOM
