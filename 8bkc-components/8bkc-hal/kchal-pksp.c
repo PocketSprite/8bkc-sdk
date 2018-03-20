@@ -45,11 +45,13 @@ typedef struct {
 #define VOLUME_KEY "vol"
 #define CONTRAST_KEY "con"
 #define BATFULLADC_KEY "batadc"
+#define KEYLOCK_KEY "kl"
 
 static ConfVars config, savedConfig;
 static QueueHandle_t soundQueue;
 static int soundRunning=0;
-static nvs_handle nvsHandle=NULL, nvsAppHandle=NULL;
+static nvs_handle nvsHandle=NULL; //8bkc namespace
+static nvs_handle nvsAppHandle=NULL; //app namespace
 static uint32_t battFullAdcVal;
 
 int kchal_get_hw_ver() {
@@ -234,7 +236,7 @@ void kchal_init_hw() {
 
 void kchal_init_sdk() {
 	if (initstate&INIT_SDK_DONE) return; //already did this
-	//Hack: This initializes a bunch of locks etc; that process uses a bunch of locks. If we do not
+	//Hack: This initializes a bunch of locks etc; that process uses a bunch of stack. If we do not
 	//do it here, it happens in the mgmt task, which is somewhat stack-starved.
 	esp_get_deep_sleep_wake_stub();
 
@@ -436,6 +438,13 @@ void kchal_power_down() {
 			vTaskDelay(10/portTICK_PERIOD_MS);
 		}
 	}
+	uint8_t doLock=0;
+	nvs_get_u8(nvsHandle, KEYLOCK_KEY, &doLock);
+	if (doLock) {
+		uint32_t rg=REG_READ(RTC_CNTL_STORE0_REG);
+		rg=(rg&0xffffff)|0xa6000000;
+		REG_WRITE(RTC_CNTL_STORE0_REG, rg);
+	}
 	ioOledPowerDown();
 	ioPowerDown();
 }
@@ -458,18 +467,28 @@ void kchal_set_new_app(int fd) {
 	}
 }
 
-
 /*
 We use RTC store0 as a location to communicate with the bootloader.
-Bit 31-24: 0xA5 if register is valid
+Bit 31-24: 0xA5 if register is valid and bootloader needs to load app in fd on startup. WARNING: Other values
+       may be valid as well; particularily the SDK will use 0xA6 if a power-up needs to boot to the chooser
+       first to do the keylock thing.
+       If the bootloader does not see A5, it will always load up the chooser.
 Bit 8: 1 if charge detection needs to be overridden (charger is plugged in, but user pressed power to start
        app anyway)
 Bit 7-0: FD of app to start
+
+Note that the bootloader will not change this RTC register. It will only boot the app if the A5 value is valid.
+It wil additionally also boot the app if the charger is present and bit 8 is set.
 */
 int kchal_get_new_app() {
 	uint32_t r=REG_READ(RTC_CNTL_STORE0_REG);
 	if ((r&0xFF000000)!=0xA5000000) return -1;
 	return r&0xff;
+}
+
+//Internal to the Chooser
+void kchal_set_rtc_reg(uint32_t val) {
+	REG_WRITE(RTC_CNTL_STORE0_REG, val);
 }
 
 void kchal_boot_into_new_app() {
