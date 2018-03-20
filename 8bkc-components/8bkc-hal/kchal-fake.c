@@ -21,9 +21,20 @@
 SemaphoreHandle_t oledMux;
 SemaphoreHandle_t configMux;
 
+
 //The hardware size of the display.
+#if (CONFIG_HW_LCD_TYPE == 2)
+#if CONFIG_LCD_ROTATED
+#define OLED_REAL_H 128
+#define OLED_REAL_W 160
+#else
+#define OLED_REAL_H 160
+#define OLED_REAL_W 128
+#endif
+#else
 #define OLED_REAL_H 320
 #define OLED_REAL_W 240
+#endif 
 
 //Bit used as pocketsprite screen
 #define OLED_FAKE_XOFF ((OLED_REAL_W-KC_SCREEN_W)/2)
@@ -184,8 +195,8 @@ void kchal_init_hw() {
 	uint16_t *fb=malloc(OLED_REAL_W*2);
 	assert(fb);
 	memset(fb, 0, OLED_REAL_W*2);
-	for (int y=0; y<320; y++) {
-		spi_lcd_send(0, y, 240, 1, fb);
+	for (int y=0; y<OLED_REAL_H; y++) {
+		spi_lcd_send(0, y, OLED_REAL_W, 1, fb);
 	}
 	free(fb);
 	initstate|=INIT_HW_DONE;
