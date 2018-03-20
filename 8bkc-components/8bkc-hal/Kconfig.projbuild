@@ -157,7 +157,91 @@ config HW_INPUT_PSX
 config HW_INPUT_SERIAL
 	bool "Use serial console for input (limited - read docs)"
 
+config HW_CUSTOM_KEYS
+	bool "Use user-defined pins for input"
+
 endchoice
+
+menu "Custom Button Definitions"
+	depends on HW_CUSTOM_KEYS
+	
+config HW_JOYSTICK_ENABLE
+	bool "Re-map joystick to d-pad" 
+	default n
+	
+config HW_UDDOWN_AXIS_INPUT
+	int "GPIO that up-down axis potentiometer is tied to"
+	depends on HW_JOYSTICK_ENABLE
+	default 34
+	range 32 39
+
+config HW_UPDOWN_AXIS_INVERT
+	bool "Invert the Up-Down axis"
+	depends on HW_JOYSTICK_ENABLE
+	default n
+
+config HW_LEFTRIGHT_AXIS_INPUT
+	int "GPIO that left-right axis potentiometer is tied to"
+	depends on HW_JOYSTICK_ENABLE
+	default 35
+	range 32 39
+	
+config HW_LEFTRIGHT_AXIS_INVERT
+	bool "Invert the Left-Right axis"
+	depends on HW_JOYSTICK_ENABLE
+	default n
+		
+config HW_UP_BUTTON
+	int "GPIO pin for Up button"
+	depends on !HW_JOYSTICK_ENABLE
+	range 0 32
+	default 31
+	
+config HW_DOWN_BUTTON
+	int "GPIO pin for Down button"
+	depends on !HW_JOYSTICK_ENABLE
+	range 0 32
+	default 30
+	
+config HW_LEFT_BUTTON
+	int "GPIO pin for Left button"
+	depends on !HW_JOYSTICK_ENABLE
+	range 0 32
+	default 29
+	
+config HW_RIGHT_BUTTON
+	int "GPIO pin for Right button"
+	depends on !HW_JOYSTICK_ENABLE
+	range 0 32
+	default 28
+	
+config HW_START_BUTTON
+	int "GPIO pin for Start button"
+	range 0 32
+	default 27
+	
+	
+config HW_SELECT_BUTTON
+	int "GPIO pin for Select button"
+	range 0 32
+	default 26
+		
+config HW_A_BUTTON
+	int "GPIO pin for A button"
+	range 0 32
+	default 25
+		
+config HW_B_BUTTON
+	int "GPIO pin for B button"
+	range 0 32
+	default 4
+		
+config HW_PWR_BUTTON
+	int "GPIO pin for Power button"
+	range 0 32
+	default 32
+	
+endmenu
 
 
 config HW_PSX_CLK

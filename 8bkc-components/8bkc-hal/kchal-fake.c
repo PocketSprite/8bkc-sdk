@@ -9,6 +9,8 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
+#include "driver/gpio.h"
+#include "driver/adc.h"
 #include "driver/dac.h"
 #include "soc/rtc_cntl_reg.h"
 #include "8bkc-hal.h"
@@ -117,6 +119,7 @@ static void kchal_mgmt_task(void *args) {
 	}
 }
 #else
+#if CONFIG_HW_INPUT_SERIAL
 
 //User serial port input as input
 static void kchal_mgmt_task(void *args) {
@@ -158,7 +161,116 @@ static void kchal_mgmt_task(void *args) {
 		vTaskDelay(100/portTICK_PERIOD_MS);
 	}
 }
+#else
 
+#ifdef CONFIG_HW_JOYSTICK_ENABLE
+
+#if ((36>CONFIG_HW_UDDOWN_AXIS_INPUT) && (CONFIG_HW_UDDOWN_AXIS_INPUT>31))
+#define adcupdownch CONFIG_HW_UDDOWN_AXIS_INPUT-28
+#if (40>CONFIG_HW_UDDOWN_AXIS_INPUT>35)
+#define adcupdownch CONFIG_HW_UDDOWN_AXIS_INPUT-36
+#endif
+#endif
+
+#if (36>CONFIG_HW_LEFTRIGHT_AXIS_INPUT && CONFIG_HW_LEFTRIGHT_AXIS_INPUT>31)
+#define adcleftrightch CONFIG_HW_LEFTRIGHT_AXIS_INPUT-28
+#if (40>CONFIG_HW_LEFTRIGHT_AXIS_INPUT>35)
+#define adcleftrightch CONFIG_HW_LEFTRIGHT_AXIS_INPUT-36
+#endif
+#endif
+
+struct adc_info{
+	uint16_t avg;
+	uint16_t max;
+	uint16_t min;
+};
+
+void fakejoystickInit(){
+	adc1_config_width(ADC_WIDTH_12Bit);
+	adc1_config_channel_atten(adcupdownch, ADC_ATTEN_11db);
+	adc1_config_channel_atten(adcleftrightch, ADC_ATTEN_11db);
+}
+
+void joystickparse(int *b, struct adc_info* ud_info, struct adc_info* lr_info){
+	int ud = adc1_get_voltage(adcupdownch);
+	int lr = adc1_get_voltage(adcleftrightch);
+	
+	//   printf("lr = %04x.\n",lr);
+	if (ud>ud_info->max){ud_info->max=ud; ud_info->avg=(ud_info->max+ud_info->min)/2;}
+	if (ud<ud_info->min){ud_info->min=ud; ud_info->avg=(ud_info->max+ud_info->min)/2;}
+	if (lr>lr_info->max){lr_info->max=lr; lr_info->avg=(lr_info->max+lr_info->min)/2;}
+	if (lr<lr_info->min){lr_info->min=lr; lr_info->avg=(lr_info->max+lr_info->min)/2;}
+	
+	#if !HW_UPDOWN_AXIS_INVERT
+	if(ud>(ud_info->avg+0x100))*b|=KC_BTN_UP;
+	if(ud<(ud_info->avg-0x100))*b|=KC_BTN_DOWN;
+	#else
+	if(ud>(ud_info->avg+0x100))*b|=KC_BTN_DOWN;
+	if(ud<(ud_info->avg-0x100))*b|=KC_BTN_UP;
+	#endif
+	
+	#if !HW_LEFTRIGHT_AXIS_INVERT
+	if(lr>(lr_info->avg+0x100))*b|=KC_BTN_RIGHT;
+	if(lr<(lr_info->avg-0x100))*b|=KC_BTN_LEFT;
+	#else
+	if(lr>(lr_info->avg+0x100))*b|=KC_BTN_LEFT;
+	if(lr<(lr_info->avg-0x100))*b|=KC_BTN_RIGHT;
+	#endif
+}
+
+#endif 
+
+void fakeCustomKeyInit(){
+	printf("Using custom buttons for input.\n");
+	gpio_config_t io_conf={
+		.intr_type=GPIO_INTR_DISABLE,
+		.mode=GPIO_MODE_INPUT,
+		.pull_up_en=1,
+		#if CONFIG_HW_CUSTOM_KEYS 
+		#if CONFIG_HW_JOYSTICK_ENABLE
+		.pin_bit_mask=((1<<CONFIG_HW_A_BUTTON)|(1<<CONFIG_HW_B_BUTTON)|(1<<CONFIG_HW_SELECT_BUTTON)|(1<<CONFIG_HW_START_BUTTON))
+		#else
+		.pin_bit_mask=((1<<CONFIG_HW_RIGHT_BUTTON)|(1<<CONFIG_HW_LEFT_BUTTON)|(1<<CONFIG_HW_UP_BUTTON)|(1<<CONFIG_HW_DOWN_BUTTON)|(1<<CONFIG_HW_B_BUTTON)|(1<<CONFIG_HW_A_BUTTON)|(1<<CONFIG_HW_SELECT_BUTTON)|(1<<CONFIG_HW_START_BUTTON))
+		#endif
+		#endif
+	};
+	gpio_config(&io_conf);
+}
+
+
+//User Custom buttons as input
+static void kchal_mgmt_task(void *args) {
+	#if CONFIG_HW_JOYSTICK_ENABLE
+	struct adc_info updown   = {2096,0,4096};
+	struct adc_info leftright= {2096,0,4096};
+	fakejoystickInit();
+	#endif
+	fakeCustomKeyInit();
+	printf("Using custom buttons for input.\n");
+	int b;
+	while(1) {
+		b=0;
+		uint64_t io=((uint64_t)GPIO.in1.data<<32)|GPIO.in;
+		#if CONFIG_HW_JOYSTICK_ENABLE
+		joystickparse(&b,&updown,&leftright);
+		#else
+		if (!(io&(1<<CONFIG_HW_RIGHT_BUTTON))) b|=KC_BTN_RIGHT;
+		if (!(io&(1<<CONFIG_HW_LEFT_BUTTON)))  b|=KC_BTN_LEFT;
+		if (!(io&(1<<CONFIG_HW_UP_BUTTON)))    b|=KC_BTN_UP;
+		if (!(io&(1<<CONFIG_HW_DOWN_BUTTON)))  b|=KC_BTN_DOWN;
+		#endif
+		
+		if (!(io&(1<<CONFIG_HW_SELECT_BUTTON))) b|=KC_BTN_SELECT;
+		if (!(io&(1<<CONFIG_HW_START_BUTTON)))  b|=KC_BTN_START;
+		if (!(io&(1<<CONFIG_HW_A_BUTTON)))      b|=KC_BTN_A;
+		if (!(io&(1<<CONFIG_HW_B_BUTTON)))      b|=KC_BTN_B;
+		
+	    printf("%02x\n",b);
+		buttons=b;
+		vTaskDelay(100/portTICK_PERIOD_MS);
+	}
+}
+#endif
 #endif
 
 #define INIT_HW_DONE 1
