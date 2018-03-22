@@ -44,4 +44,4 @@ The 'fake' mode has some things that are not implemented:
  - No battery monitoring features. Battery voltage will always be reported as 3.6V.
 
 (Note: These limitiations also mean that the GB/SMS emulators can be cross-compiled to a devboard, but they will
-not be able to load any ROMs due to lack of an AppFs filesystem.)
+not be able to load any ROMs due to lack of an AppFs filesystem and as such will most likely crash.)

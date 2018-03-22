@@ -4,7 +4,7 @@ CFLAGS:=-ggdb $(shell xml2-config --cflags)
 LDFLAGS:=-lm $(shell xml2-config --libs) -lgd
 
 $(TARGET): $(OBJ)
-	$(CC) -o $@ $(LDFLAGS) $(OBJ)
+	$(CC) -o $@ $(OBJ) $(LDFLAGS)
 
 test: $(TARGET)
 	./$(TARGET) test/test.c test/test.h test/level1.tmx
