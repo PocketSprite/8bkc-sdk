@@ -294,3 +294,7 @@ tilegfx_map_t *tilegfx_dup_tilemap(const tilegfx_map_t *orig) {
 	memcpy((void*)ret->tiles, orig->tiles, ret->h*ret->w*2);
 	return ret;
 }
+
+uint16_t *tilegfx_get_fb() {
+	return fb;
+}

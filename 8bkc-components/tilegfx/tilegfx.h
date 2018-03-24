@@ -161,4 +161,16 @@ static inline uint16_t tilegfx_get_tile(const tilegfx_map_t *map, int x, int y) 
 	return map->tiles[x+y*map->w];
 }
 
+/**
+ * @brief Get internal framebuffer
+ *
+ * This returns a pointer to the internal framebuffer memory where tilegfx renders everything.
+ * You can use this to manually poke pixels into memory, or to get access to the raw pixels
+ * after some tiles have been rendered. Note that in double_res mode, after rendering tilesets
+ * this framebuffer is 160x128 pixels in size, but after calling tilegfx_flush the contents
+ * will be resized to 80x64!
+ *
+ * Pixels here are in big-endian RGB565 format (same as what's sent to the OLED).
+ */
+uint16_t *tilegfx_get_fb();
 
