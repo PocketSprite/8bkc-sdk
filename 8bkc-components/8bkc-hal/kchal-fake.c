@@ -44,10 +44,10 @@ SemaphoreHandle_t configMux;
 
 typedef struct {
 	uint8_t volume;
-	uint8_t contrast;
+	uint8_t brightness;
 } ConfVars;
 #define VOLUME_KEY "vol"
-#define CONTRAST_KEY "con"
+#define BRIGHTNESS_KEY "con" //backwards compatible; used to be misnamed 'contrast'
 #define BATFULLADC_KEY "batadc"
 
 static ConfVars config, savedConfig;
@@ -64,7 +64,7 @@ static void flushConfigToNvs() {
 	//Check if anything changed
 	if (memcmp(&config, &savedConfig, sizeof(config))==0) return;
 	if (config.volume!=savedConfig.volume) nvs_set_u8(nvsHandle, VOLUME_KEY, config.volume);
-	if (config.contrast!=savedConfig.contrast) nvs_set_u8(nvsHandle, CONTRAST_KEY, config.contrast);
+	if (config.brightness!=savedConfig.brightness) nvs_set_u8(nvsHandle, BRIGHTNESS_KEY, config.brightness);
 	//Okay, we're up to date again
 	memcpy(&savedConfig, &config, sizeof(config));
 	nvs_commit(nvsHandle);
@@ -226,11 +226,11 @@ void kchal_init_sdk() {
 
 	//Default values
 	config.volume=128;
-	config.contrast=192;
+	config.brightness=192;
 	r=nvs_open("8bkc", NVS_READWRITE, &nvsHandle);
 	if (r==ESP_OK) {
 		nvs_get_u8(nvsHandle, VOLUME_KEY, &config.volume);
-		nvs_get_u8(nvsHandle, CONTRAST_KEY, &config.contrast);
+		nvs_get_u8(nvsHandle, BRIGHTNESS_KEY, &config.brightness);
 		memcpy(&savedConfig, &config, sizeof(config));
 	}
 
@@ -282,14 +282,14 @@ uint8_t kchal_get_volume() {
 	return config.volume;
 }
 
-void kchal_set_contrast(int contrast) {
+void kchal_set_brightness(int brightness) {
 	xSemaphoreTake(configMux, portMAX_DELAY);
-	config.contrast=contrast;
+	config.brightness=brightness;
 	xSemaphoreGive(configMux);
 }
 
-uint8_t kchal_get_contrast(int contrast) {
-	return config.contrast;
+uint8_t kchal_get_brightness(int brightness) {
+	return config.brightness;
 }
 
 void kchal_sound_start(int rate, int buffsize) {

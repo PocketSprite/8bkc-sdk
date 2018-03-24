@@ -97,7 +97,7 @@ int powerbtn_menu_show(uint16_t *fb) {
 		if ((newIo&KC_BTN_LEFT) || (newIo&KC_BTN_RIGHT)) {
 			int v=128;
 			if (menuItem==SCN_VOLUME) v=kchal_get_volume();
-			if (menuItem==SCN_BRIGHT) v=kchal_get_contrast();
+			if (menuItem==SCN_BRIGHT) v=kchal_get_brightness();
 			if (newIo&KC_BTN_LEFT) v-=2;
 			if (newIo&KC_BTN_RIGHT) v+=2;
 			if (v<0) v=0;
@@ -107,7 +107,7 @@ int powerbtn_menu_show(uint16_t *fb) {
 				doRefresh=1;
 			}
 			if (menuItem==SCN_BRIGHT) {
-				kchal_set_contrast(v);
+				kchal_set_brightness(v);
 				doRefresh=1;
 			}
 		}
@@ -151,7 +151,7 @@ int powerbtn_menu_show(uint16_t *fb) {
 		if (scroll==0 && (menuItem==SCN_VOLUME || menuItem==SCN_BRIGHT)) {
 			int v=0;
 			if (menuItem==SCN_VOLUME) v=kchal_get_volume();
-			if (menuItem==SCN_BRIGHT) v=kchal_get_contrast();
+			if (menuItem==SCN_BRIGHT) v=kchal_get_brightness();
 			if (v<0) v=0;
 			if (v>255) v=255;
 			renderGfx(fb, 14, 25+16, 14, 130, (v*60)/256, 4);

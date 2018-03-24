@@ -2,7 +2,7 @@
 #include <stdint.h>
 
 
-void ssd1331SetContrast(int ctr) {
+void ssd1331SetBrightness(int ctr) {
 #if 0
 	char sendCmd[]={0xAE, 0x81, 0, 0x82, 0, 0x83, 0,0xAF};
 	sendCmd[1]=(0x91*ctr)>>8;

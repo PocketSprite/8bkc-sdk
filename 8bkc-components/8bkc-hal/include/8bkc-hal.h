@@ -175,19 +175,16 @@ uint8_t kchal_get_volume();
 /**
  * @brief Set the brightness of the screen
  *
- * (Yes, this function is misnamed. I'll refactor this when I have some time - JD)
- *
  * @param Brightness. 0 is lowest, 255 is full highest
  */
-void kchal_set_contrast(int contrast);
+void kchal_set_brightness(int brightness);
 
 /**
  * @brief Set the brightness of the screen
- * (Also misnamed)
  *
  * @return Brightness. 0 is lowest, 255 is full highest
  */
-uint8_t kchal_get_contrast();
+uint8_t kchal_get_brightness();
 
 /**
  * @brief Exit to chooser
