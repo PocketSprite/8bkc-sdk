@@ -1,4 +1,5 @@
 
+CFLAGS += -Wno-error=parentheses
 
 COMPONENT_ADD_INCLUDEDIRS := . ./UGUI
 COMPONENT_SRCDIRS := UGUI
