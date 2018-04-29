@@ -147,6 +147,10 @@ int kcugui_menu(kcugui_menuitem_t *menu, char *desc, kcugui_menu_cb_t cb, void *
 			for (int y=(scpos<0)?-scpos:0; y<6; y++) {
 				if (menu[p].flags&KCUGUI_MENUITEM_LAST) {
 					endpos=p-1;
+					if (p==2) {
+						UG_SetForecolor(C_BLUE);
+						UG_PutString(0, 12+8*y, "[end]");
+					}
 					break;
 				}
 				if (p==curspos) {

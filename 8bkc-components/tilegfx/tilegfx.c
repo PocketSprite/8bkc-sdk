@@ -210,7 +210,7 @@ void tilegfx_deinit() {
 //Obviously, we also have to average the two lines of pixels together to keep the aspect ratio.
 
 //rrrr.0ggg.gg0b.bbb0
-//To take the lsb off, and with 0xf7de
+//To take the lsb off, and with 0xf7be
 
 //Takes the double-sized fb, scales it back to something that can actually be rendered.
 void undo_x2_scaling() {
@@ -223,7 +223,7 @@ void undo_x2_scaling() {
 			//Colors are stored with the bytes swapped. We need to swap them back.
 			p=((p&0xFF00FF00)>>8)|((p&0x00ff00ff)<<8);
 			p2=((p2&0xFF00FF00)>>8)|((p2&0x00ff00ff)<<8);
-			p=((p&0xf7def7de)>>1)+((p2&0xf7def7de)>>1); //average both pixels
+			p=((p&0xf7bef7be)>>1)+((p2&0xf7bef7be)>>1); //average both pixels
 			
 			//It's possible to do this using some code doing bitshifts and parallel
 			//multiplies and stuff to get the most speed out of the CPU. This is not

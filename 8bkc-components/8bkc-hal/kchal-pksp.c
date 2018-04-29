@@ -175,7 +175,8 @@ const static uint8_t batEmptyIcon[]={
 	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0
 };
 
-
+//ToDo: Do not use ugui (needs an entire frame buffer) but just use a partial blit
+//to dump this to screen.
 static void show_bat_empty_icon() {
 	const int cols[2][3]={
 		{0x0000, 0xffff, 0xf800},
@@ -471,14 +472,15 @@ void kchal_set_new_app(int fd) {
 We use RTC store0 as a location to communicate with the bootloader.
 Bit 31-24: 0xA5 if register is valid and bootloader needs to load app in fd on startup. WARNING: Other values
        may be valid as well; particularily the SDK will use 0xA6 if a power-up needs to boot to the chooser
-       first to do the keylock thing.
+       first to do the keylock unlock sequence.
        If the bootloader does not see A5, it will always load up the chooser.
 Bit 8: 1 if charge detection needs to be overridden (charger is plugged in, but user pressed power to start
        app anyway)
 Bit 7-0: FD of app to start
 
 Note that the bootloader will not change this RTC register. It will only boot the app if the A5 value is valid.
-It wil additionally also boot the app if the charger is present and bit 8 is set.
+It wil additionally also boot the app if the charger is present and bit 8 is set; if the charger is detected but
+bit 8 is clear, it will always boot to the chooser.
 */
 int kchal_get_new_app() {
 	uint32_t r=REG_READ(RTC_CNTL_STORE0_REG);
