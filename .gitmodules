@@ -4,9 +4,3 @@
 [submodule "8bkc-components/ugui/UGUI"]
 	path = 8bkc-components/ugui/UGUI
 	url = https://github.com/angelmerino/UGUI.git
-[submodule "8bkc-components/tilengine/tilengine"]
-	path = 8bkc-components/tilengine/tilengine
-	url = https://github.com/megamarc/Tilengine
-[submodule "8bkc-components/micromod/micromod"]
-	path = 8bkc-components/micromod/micromod
-	url = https://github.com/martincameron/micromod
