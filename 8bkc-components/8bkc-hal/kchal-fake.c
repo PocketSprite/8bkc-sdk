@@ -368,6 +368,13 @@ uint32_t kchal_get_keys() {
 	return buttons;
 }
 
+void kchal_wait_keys_released() {
+	uint32_t keys=kchal_get_keys();
+	while (kchal_get_keys() & keys) {
+		vTaskDelay(10);
+	}
+}
+
 void kchal_send_fb(const uint16_t *fb) {
 	xSemaphoreTake(oledMux, portMAX_DELAY);
 	spi_lcd_send(OLED_FAKE_XOFF, OLED_FAKE_YOFF, OLED_FAKE_W, OLED_FAKE_H, fb);

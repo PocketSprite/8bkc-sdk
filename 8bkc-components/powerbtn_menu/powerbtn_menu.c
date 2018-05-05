@@ -60,6 +60,7 @@ static void renderGfx(uint16_t *ovl, int dx, int dy, int sx, int sy, int sw, int
 int powerbtn_menu_show(uint16_t *fb) {
 	//We'll try to save the current framebuffer image to do the overlay on. If this fails (because out of memory)
 	//we just use a black background.
+	assert(fb);
 	uint16_t *oldfb=malloc(KC_SCREEN_W*KC_SCREEN_H*sizeof(uint16_t));
 	if (oldfb!=NULL) memcpy(oldfb, fb, KC_SCREEN_W*KC_SCREEN_H*sizeof(uint16_t));
 	int io, newIo, oldIo=0;
@@ -114,10 +115,12 @@ int powerbtn_menu_show(uint16_t *fb) {
 		if ((io&KC_BTN_A) || (io&KC_BTN_B)) {
 			if (menuItem==SCN_PWRDWN) {
 				free(oldfb);
+				kchal_wait_keys_released();
 				return POWERBTN_MENU_POWERDOWN;
 			}
 			if (menuItem==SCN_EXIT) {
 				free(oldfb);
+				kchal_wait_keys_released();
 				return POWERBTN_MENU_EXIT;
 			}
 		}
@@ -129,6 +132,7 @@ int powerbtn_menu_show(uint16_t *fb) {
 		if (!(io&KC_BTN_POWER)) powerReleased=1;
 		if (io&KC_BTN_START || (powerReleased && (io&KC_BTN_POWER))) {
 			free(oldfb);
+				kchal_wait_keys_released();
 			return POWERBTN_MENU_NONE;
 		}
 

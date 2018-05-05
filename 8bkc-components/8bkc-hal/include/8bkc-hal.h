@@ -76,6 +76,13 @@ void kchal_init();
 uint32_t kchal_get_keys();
 
 /**
+ * @brief Wait until all buttons currently pressed are released
+ *
+ * @note Any keys pressed while this routine is running will *not* be monitored.
+ **/
+void kchal_wait_keys_released();
+
+/**
  * @brief Send framebuffer to display
  *
  * @param fb Pointer to KC_SCREEN_W*KC_SCREEN_H (80x64) 16-bit values. The 16-bit values

@@ -16,32 +16,38 @@ Some easy-to-use-ish widgets for common use sceanarios. Need to have uGUI initia
 #include "ugui.h"
 #include "8bkcgui-widgets.h"
 
-//Actually can accept multiple globs, separated by ,
-//e.g. '*.gb,*.gbc"
-static int nextFdFileForGlob(int fd, const char *glob, const char **name) {
+
+//Filter for kcugui_filechooser_filter_glob. Accepts multiple globs separated by a comma: "*.gb,*.gbc"
+int kcugui_filechooser_filter_glob(const char *name, void *filterarg) {
+	const char *glob=(const char *)filterarg;
+	for (const char *p=glob; p!=NULL; p=strchr(p, ',')) {
+		char ppart[128];
+		if (*p==',') p++; //skip over comma
+		//Copy part of string to non-const array
+		strncpy(ppart, p, sizeof(ppart));
+		//Zero-terminate at ','. Make sure that worst-case it's terminated at the end of the local
+		//array.
+		char *pend=strchr(ppart, ',');
+		if (pend!=NULL) *pend=0; else ppart[sizeof(ppart)-1]=0;
+		//Try to match
+		if (fnmatch(ppart, name, FNM_CASEFOLD)==0) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+static int nextFdFileForFilter(int fd, fc_filtercb_t filter, void *filterarg, const char **name) {
 	while(1) {
 		fd=appfsNextEntry(fd);
 		if (fd==APPFS_INVALID_FD) break;
 		appfsEntryInfo(fd, name, NULL);
-		for (const char *p=glob; p!=NULL; p=strchr(p, ',')) {
-			char ppart[128];
-			if (*p==',') p++; //skip over comma
-			//Copy part of string to non-const array
-			strncpy(ppart, p, sizeof(ppart));
-			//Zero-terminate at ','. Make sure that worst-case it's terminated at the end of the local
-			//array.
-			char *pend=strchr(ppart, ',');
-			if (pend!=NULL) *pend=0; else ppart[sizeof(ppart)-1]=0;
-			//Try to match
-			if (fnmatch(ppart, *name, FNM_CASEFOLD)==0) {
-				return fd;
-			}
-		}
+		if (filter(*name, filterarg)) return fd;
 	}
 	return APPFS_INVALID_FD;
 }
 
-int kcugui_filechooser(char *glob, char *desc, kcugui_filechooser_cb_t cb, void *usrptr) {
+int kcugui_filechooser_filter(fc_filtercb_t filter, void *filterarg, char *desc, kcugui_filechooser_cb_t cb, void *usrptr) {
 	int scpos=-1;
 	int curspos=0;
 	int oldkeys=0xffff; //so we do not detect keys that were pressed on entering this
@@ -56,12 +62,12 @@ int kcugui_filechooser(char *glob, char *desc, kcugui_filechooser_cb_t cb, void 
 		UG_PutString(0, 0, desc);
 		
 		//Grab first entry
-		fd=nextFdFileForGlob(fd, glob, &name);
+		fd=nextFdFileForFilter(fd, filter, filterarg, &name);
 		
 		//Skip invisible entries.
 		int p=0;
 		while (p!=((scpos<0)?0:scpos) && fd!=APPFS_INVALID_FD) {
-			fd=nextFdFileForGlob(fd, glob, &name);
+			fd=nextFdFileForFilter(fd, filter, filterarg, &name);
 			p++;
 		}
 		
@@ -89,7 +95,7 @@ int kcugui_filechooser(char *glob, char *desc, kcugui_filechooser_cb_t cb, void 
 				UG_PutString(0, 12+8*y, truncnm);
 				p++;
 				//Grab next fd
-				fd=nextFdFileForGlob(fd, glob, &name);
+				fd=nextFdFileForFilter(fd, filter, filterarg, &name);
 			}
 		}
 		kcugui_flush();
@@ -110,17 +116,20 @@ int kcugui_filechooser(char *glob, char *desc, kcugui_filechooser_cb_t cb, void 
 				if (curspos>(scpos+4)) scpos++;
 			}
 			if (prKeys&KC_BTN_A) {
+				kchal_wait_keys_released();
 				return selFd;
 			}
 			if (prKeys&(~(KC_BTN_UP|KC_BTN_DOWN|KC_BTN_A))) {
-				if (cb) cb(prKeys, &glob, &desc, usrptr);
+				if (cb) cb(prKeys, &filterarg, &desc, usrptr);
 			}
-			//ToDo: callback thing
-			
 			oldkeys=keys;
 			vTaskDelay(50/portTICK_PERIOD_MS);
 		} while (prKeys==0);
 	}
+}
+
+int kcugui_filechooser(char *glob, char *desc, kcugui_filechooser_cb_t cb, void *usrptr) {
+	return kcugui_filechooser_filter(kcugui_filechooser_filter_glob, glob, desc, cb, usrptr);
 }
 
 int kcugui_menu(kcugui_menuitem_t *menu, char *desc, kcugui_menu_cb_t cb, void *usrptr) {
@@ -185,6 +194,7 @@ int kcugui_menu(kcugui_menuitem_t *menu, char *desc, kcugui_menu_cb_t cb, void *
 				if (curspos>(scpos+4)) scpos++;
 			}
 			if (prKeys&KC_BTN_A) {
+				kchal_wait_keys_released();
 				return curspos;
 			}
 			if (prKeys&(~(KC_BTN_UP|KC_BTN_DOWN|KC_BTN_A))) {
