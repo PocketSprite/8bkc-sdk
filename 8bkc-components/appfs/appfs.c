@@ -106,6 +106,15 @@ static spi_flash_mmap_handle_t appfsMetaMmapHandle;
 static uint32_t appfsPartOffset=0;
 #endif
 
+
+static int page_in_part(int page) {
+#ifndef BOOTLOADER_BUILD
+	return  ((page+1)*APPFS_SECTOR_SZ < appfsPart->size);
+#else
+	return 1;
+#endif
+}
+
 //Find active meta half-sector. Updates appfsActiveMeta to the most current one and returns ESP_OK success.
 //Returns ESP_ERR_NOT_FOUND when no active metasector is found.
 static esp_err_t findActiveMeta() {
@@ -214,7 +223,7 @@ appfs_handle_t appfsNextEntry(appfs_handle_t fd) {
 size_t appfsGetFreeMem() {
 	size_t ret=0;
 	for (int i=0; i<APPFS_PAGES; i++) {
-		if (appfsMeta[appfsActiveMeta].page[i].used==APPFS_USE_FREE) {
+		if (appfsMeta[appfsActiveMeta].page[i].used==APPFS_USE_FREE && page_in_part(i)) {
 			ret+=APPFS_SECTOR_SZ;
 		}
 	}
@@ -527,7 +536,7 @@ esp_err_t appfsCreateFile(const char *filename, size_t size, appfs_handle_t *han
 	int first=-1, prev=-1;
 	int sizeLeft=size;
 	for (int j=0; j<APPFS_PAGES; j++) {
-		if (appfsMeta[appfsActiveMeta].page[j].used==APPFS_USE_FREE) {
+		if (appfsMeta[appfsActiveMeta].page[j].used==APPFS_USE_FREE && page_in_part(j)) {
 			ESP_LOGD(TAG, "Using page %d...", j);
 			if (prev==-1) {
 				first=j; //first free page; save to store name here.
@@ -698,7 +707,9 @@ void appfsDump() {
 	for (int i=0; i<16; i++) printf("%02X-", i);
 	printf("\n");
 	for (int i=0; i<APPFS_PAGES; i++) {
-		if (appfsMeta[appfsActiveMeta].page[i].used==APPFS_USE_FREE) {
+		if (!page_in_part(i)) {
+			printf("  ");
+		} else if (appfsMeta[appfsActiveMeta].page[i].used==APPFS_USE_FREE) {
 			printf("..");
 		} else if (appfsMeta[appfsActiveMeta].page[i].used==APPFS_USE_DATA) {
 			printf("%02X", appfsMeta[appfsActiveMeta].page[i].next);
