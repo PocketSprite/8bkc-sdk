@@ -215,6 +215,14 @@ uint32_t kchal_rtc_reg_bootup_val() {
 static int initstate=0;
 
 static void kchal_init_common() {
+	//Use this info to measure battery voltage. If too low, refuse to start.
+	ioVbatForceMeasure();
+	printf("Battery voltage: %d mv\n", kchal_get_bat_mv());
+	if (kchal_get_bat_pct() == 0 && ioGetChgStatus()==IO_CHG_NOCHARGER) {
+		printf("Empty battery and not charging: shutting down.\n");
+		show_bat_empty_icon();
+		kchal_power_down();
+	}
 	ssd1331SetBrightness(config.brightness);
 	initstate|=INIT_COMMON_DONE;
 }
@@ -287,14 +295,6 @@ void kchal_init_sdk() {
 		r=nvs_open("factoryapp", NVS_READWRITE, &nvsAppHandle);
 	}
 
-
-	//Use this info to measure battery voltage. If too low, refuse to start.
-	ioVbatForceMeasure();
-	printf("Battery voltage: %d mv\n", kchal_get_bat_mv());
-	if (kchal_get_bat_pct() == 0) {
-		show_bat_empty_icon();
-		kchal_power_down();
-	}
 	xTaskCreatePinnedToCore(&kchal_mgmt_task, "kchal", 1024*4, NULL, 5, NULL, 0);
 	initstate|=INIT_SDK_DONE;
 	if (initstate==(INIT_HW_DONE|INIT_SDK_DONE)) kchal_init_common();
