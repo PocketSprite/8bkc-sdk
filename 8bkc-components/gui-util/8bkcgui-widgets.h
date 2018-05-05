@@ -7,14 +7,17 @@
 //Return 1 if something has changed.
 typedef int (*kcugui_filechooser_cb_t)(int button, void **filterarg, char **desc, void *usrptr);
 
-int kcugui_filechooser(char *glob, char *desc, kcugui_filechooser_cb_t cb, void *usrptr);
+//Pass this to not show extensions
+#define KCUGUI_FILE_FLAGS_NOEXT (1<<0)
+
+int kcugui_filechooser(char *glob, char *desc, kcugui_filechooser_cb_t cb, void *usrptr, int flags);
 
 //Custom filter for kcugui_filechooser_filter. Return 1 on match (display), 0 on no match (don't display).
 typedef int (*fc_filtercb_t)(const char *name, void *filterarg);
 //Standard filter for globbing as used in kcugui_filechooser
 int kcugui_filechooser_filter_glob(const char *name, void *filterarg);
 
-int kcugui_filechooser_filter(fc_filtercb_t filter, void *filterarg, char *desc, kcugui_filechooser_cb_t cb, void *usrptr);
+int kcugui_filechooser_filter(fc_filtercb_t filter, void *filterarg, char *desc, kcugui_filechooser_cb_t cb, void *usrptr, int flags);
 
 
 #define KCUGUI_MENUITEM_LAST (1<<0)
