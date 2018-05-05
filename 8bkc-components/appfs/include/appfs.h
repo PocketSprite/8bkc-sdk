@@ -150,7 +150,7 @@ esp_err_t appfsRead(appfs_handle_t fd, size_t start, void *buf, size_t len);
  * @brief Atomically rename a file
  * 
  * This atomically renames a file. If a file with the target name already exists, it will be deleted. This action
- * is atomically, so at any point in time, either the original or the new file will fully exist under the target name.
+ * is done atomically, so at any point in time, either the original or the new file will fully exist under the target name.
  *
  * @param from Original name of file
  * @param to Target name of file
