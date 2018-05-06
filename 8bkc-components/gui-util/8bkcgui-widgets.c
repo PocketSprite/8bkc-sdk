@@ -62,6 +62,7 @@ int kcugui_filechooser_filter(fc_filtercb_t filter, void *filterarg, char *desc,
 	int endpos=9999;
 	int selFd=APPFS_INVALID_FD;
 	int selPos=0;
+	int selScr;
 	const char *name;
 	while(1) {
 		char selFn[65];
@@ -107,7 +108,6 @@ int kcugui_filechooser_filter(fc_filtercb_t filter, void *filterarg, char *desc,
 				char truncnm[12];
 				strncpy(truncnm, name, 11);
 				truncnm[11]=0;
-				int dot=-1;
 				if (flags & KCUGUI_FILE_FLAGS_NOEXT) remove_ext(truncnm);
 				//show
 				UG_PutString(0, 12+8*y, truncnm);
@@ -120,9 +120,9 @@ int kcugui_filechooser_filter(fc_filtercb_t filter, void *filterarg, char *desc,
 
 		if (flags & KCUGUI_FILE_FLAGS_NOEXT) remove_ext(selFn);
 		if (strlen(selFn)>11) strncat(selFn, "   ", 64);
+		selScr=0;
 
 		int prKeys;
-			int scpos=0;
 		do {
 			int keys=kchal_get_keys();
 			//Filter out keys that are just pressed
@@ -147,12 +147,12 @@ int kcugui_filechooser_filter(fc_filtercb_t filter, void *filterarg, char *desc,
 			oldkeys=keys;
 			vTaskDelay(30/portTICK_PERIOD_MS);
 			if (strlen(selFn)>11) {
-				scpos++;
+				selScr++;
 				UG_SetForecolor(C_WHITE);
-				int cp=scpos/6;
+				int cp=selScr/6;
 				for (int i=0; i<14; i++) {
 					cp=cp%strlen(selFn);
-					UG_PutChar(selFn[cp], i*6-(scpos%6), selPos, C_WHITE, C_BLACK);
+					UG_PutChar(selFn[cp], i*6-(selScr%6), selPos, C_WHITE, C_BLACK);
 					cp++;
 				}
 				kcugui_flush();
