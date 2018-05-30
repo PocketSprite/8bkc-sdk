@@ -86,8 +86,8 @@ void kchal_wait_keys_released();
  * @brief Send framebuffer to display
  *
  * @param fb Pointer to KC_SCREEN_W*KC_SCREEN_H (80x64) 16-bit values. The 16-bit values
- *           are defined as RRRRRGGGGGGBBBBB, BUT with the two bytes swapped, so
- *           GGGBBBBB RRRRRRGGGG.
+ *           are defined in 5-6-5 RGB format (RRRRRGGG:GGGBBBBB), BUT with the two bytes swapped,
+ *           so GGGBBBBB:RRRRRGGG.
  *
  * @note The kchal_fbval_rgb inline function provides an easy way to calculate pixel values
  *       starting from 8-bit RGB values.
