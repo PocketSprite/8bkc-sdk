@@ -41,10 +41,10 @@ return the path you entered earlier.
 
 Finally, the PocketSprite SDK contains some utilities running on your computer that need to be compiled. The SDK will
 automatically take care of this, but it needs to have a compiler (gcc) and the development packages of some
-libraries (libgd, libxml2) installed. Please make sure these are available. For instance, under Debian/Ubuntu,
+libraries (libgd, libxml2, imagemagick) installed. Please make sure these are available. For instance, under Debian/Ubuntu,
 you would do::
 
-    apt-get install gcc libgd-dev libxml2-dev
+    apt-get install gcc libgd-dev libxml2-dev imagemagick
 
 to install them.
 
