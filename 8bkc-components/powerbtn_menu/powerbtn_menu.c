@@ -69,6 +69,7 @@ int powerbtn_menu_show(uint16_t *fb) {
 	int scroll=0;
 	int doRefresh=1;
 	int powerReleased=0;
+	int oldArrowsTick=-1;
 	while(1) {
 		if (oldfb) {
 			for (int i=0; i<KC_SCREEN_W*KC_SCREEN_H; i++) {
@@ -132,7 +133,7 @@ int powerbtn_menu_show(uint16_t *fb) {
 		if (!(io&KC_BTN_POWER)) powerReleased=1;
 		if (io&KC_BTN_START || (powerReleased && (io&KC_BTN_POWER))) {
 			free(oldfb);
-				kchal_wait_keys_released();
+			kchal_wait_keys_released();
 			return POWERBTN_MENU_NONE;
 		}
 
@@ -147,8 +148,18 @@ int powerbtn_menu_show(uint16_t *fb) {
 		if (scroll) {
 			doRefresh=1;
 			renderGfx(fb, 0, 16+scroll+((scroll>0)?-64:64), 0,32*menuItem,80,32);
+			oldArrowsTick=-1; //to force arrow redraw
 		} else {
 			renderGfx(fb, 0, 16, 0,32*menuItem,80,32);
+			//Render arrows
+			int t=xTaskGetTickCount()/(400/portTICK_PERIOD_MS);
+			t=(t&1);
+			if (t!=oldArrowsTick) {
+				doRefresh=1;
+				renderGfx(fb, 36, 0, t?0:8, 134, 8, 8);
+				renderGfx(fb, 36, 56, t?16:24, 134, 8, 8);
+				oldArrowsTick=t;
+			}
 		}
 		
 		//Handle volume/brightness bars
