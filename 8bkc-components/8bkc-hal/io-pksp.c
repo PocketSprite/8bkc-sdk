@@ -128,6 +128,20 @@ int ioJoyReadInput() {
 	static int powerWasPressed=0;
 	static uint32_t powerPressedTime;
 	uint64_t io=((uint64_t)GPIO.in1.data<<32)|GPIO.in;
+	static uint64_t last=0xffffffff;
+
+	//There's some weirdness with the select button... I see dips of about 10uS in the signal. May be caused by 
+	//some other hardware EMC'ing power into that line... need to research a bit more.
+	//For now, here's a quick and dirty hack to fix it: if the select button was not pressed but is now, wait 12uS
+	//(long enough for the glitch to pass) and re-sample.
+	if (last&GPIO_BTN_SELECT) {
+		if (!(io&GPIO_BTN_SELECT)) {
+			ets_delay_us(12);
+			io=((uint64_t)GPIO.in1.data<<32)|GPIO.in;
+		}
+	}
+	last=io;
+
 	//Ignore remnants from 1st power press
 	if ((io&GPIO_BTN_PWR)) {
 		if (!initial) {
