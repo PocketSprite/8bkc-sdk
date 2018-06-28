@@ -142,7 +142,10 @@ int kcugui_filechooser_filter(fc_filtercb_t filter, void *filterarg, char *desc,
 				return selFd;
 			}
 			if (prKeys&(~(KC_BTN_UP|KC_BTN_DOWN|KC_BTN_A))) {
-				if (cb) cb(prKeys, &filterarg, &desc, usrptr);
+				if (cb) {
+					int cbr=cb(prKeys, &filterarg, &desc, usrptr);
+					if (cbr==KCUGUI_CB_CANCEL) return -1;
+				}
 			}
 			oldkeys=keys;
 			vTaskDelay(30/portTICK_PERIOD_MS);
@@ -236,7 +239,10 @@ int kcugui_menu(kcugui_menuitem_t *menu, char *desc, kcugui_menu_cb_t cb, void *
 				return curspos;
 			}
 			if (prKeys&(~(KC_BTN_UP|KC_BTN_DOWN|KC_BTN_A))) {
-				if (cb) cb(prKeys, &desc, &menu, curspos, usrptr);
+				if (cb) {
+					int cbr=cb(prKeys, &desc, &menu, curspos, usrptr);
+					if (cbr==KCUGUI_CB_CANCEL) return -1;
+				}
 			}
 			
 			vTaskDelay(30/portTICK_PERIOD_MS);

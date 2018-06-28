@@ -1,10 +1,15 @@
 #ifndef KCGUI_WIDGETS_H
 #define KCGUI_WIDGETS_H
 
+
+#define KCUGUI_CB_NO_CHANGE 0 //Will not have any effect on the menu
+#define KCUGUI_CB_REFRESH 1 //Will refresh the listing
+#define KCUGUI_CB_CANCEL 2 //Will cause the menu to exit with a return value of -1
+
 //Gets called when an unknown key (start, select, b, left, right) is called during a file
 //selection. Cb has the opportunity to modify the text on top as well as the filter arg (which is
 //be a ptr to the glob value in kcugui_filechooser).
-//Return 1 if something has changed.
+//Return one of KCUGUI_CB_*
 typedef int (*kcugui_filechooser_cb_t)(int button, void **filterarg, char **desc, void *usrptr);
 
 //Pass this to not show extensions
@@ -28,9 +33,9 @@ typedef struct {
 	void *user;
 } kcugui_menuitem_t;
 
+//Return one of KCUGUI_CB_*
 typedef int (*kcugui_menu_cb_t)(int button, char **desc, kcugui_menuitem_t **menu, int item_selected, void *userptr);
 
 int kcugui_menu(kcugui_menuitem_t *menu, char *desc, kcugui_menu_cb_t cb, void *usrptr);
-
 
 #endif
