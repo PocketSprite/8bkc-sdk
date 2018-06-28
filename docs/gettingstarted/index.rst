@@ -19,9 +19,10 @@ Software
 The PocketSprite uses ESP-IDF, as well as the toolchain for the Xtensa processor that is in the ESP32
 chip that forms the brains of the small console. While ESP-IDF is included (as a submodule) in the 
 PocketSprite SDK, the toolchain needs some setting up; please refer to the ESP-IDF documentation to
-`install it <https://esp-idf.readthedocs.io/en/latest/get-started/index.html>`_. Note that while 
-ESP-IDF supports Windows, Linux and Mac as development platforms, the PocketSprite SDK for now only 
-supports Linux (and may or may not work out of the box with Mac).
+`install it <https://esp-idf.readthedocs.io/en/latest/get-started/index.html>`_.
+
+Note that while ESP-IDF supports Windows, Linux and Mac as development platforms, the PocketSprite SDK for now only 
+supports Linux (and may or may not work out of the box with Mac).  Some users have reported success with using Windows Subsystem for Linux.
 
 After you have installed esp-idf using the linked instructions, get the PocketSprite SDK components. Note that the
 SDK still uses the old '8bkc' name as an identifier::
