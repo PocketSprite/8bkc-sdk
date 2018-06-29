@@ -396,6 +396,13 @@ void kchal_sound_stop() {
 }
 
 #define SND_CHUNKSZ 32
+/*
+Note that there's a slight workaround for a hardware thing here to increase the sound quality. The issue is that the
+DAC of the ESP32 spits out a voltage between 0V and the power supply of the ESP32. The latter one has some noise in it,
+which can tricke through to the amp and speaker. By scaling the output to [0..maxvol] instead 
+of [128-maxvol/2..128+maxvol/2], we also scale the noise by that, leading to much better audio quality on low volumes and
+not nearly as much noise when the volume is 0.
+*/
 void kchal_sound_push(uint8_t *buf, int len) {
 	uint32_t tmpb[SND_CHUNKSZ];
 	int i=0;
@@ -404,7 +411,7 @@ void kchal_sound_push(uint8_t *buf, int len) {
 		if (plen>SND_CHUNKSZ) plen=SND_CHUNKSZ;
 		for (int j=0; j<plen; j++) {
 			int s=((((int)buf[i+j])-128)*config.volume); //Make [-128,127], multiply with volume
-			s=(s>>8)+128; //divide off volume max, get back to [0-255]
+			s=(s>>8)+(config.volume/2); //divide off volume max, get back to [0-maxvol]
 			if (s>255) s=255;
 			if (s<0) s=0;
 			tmpb[j]=((s)<<8)+((s)<<24);
