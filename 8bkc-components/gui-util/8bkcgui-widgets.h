@@ -1,6 +1,9 @@
 #ifndef KCGUI_WIDGETS_H
 #define KCGUI_WIDGETS_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define KCUGUI_CB_NO_CHANGE 0 //Will not have any effect on the menu
 #define KCUGUI_CB_REFRESH 1 //Will refresh the listing
@@ -37,5 +40,10 @@ typedef struct {
 typedef int (*kcugui_menu_cb_t)(int button, char **desc, kcugui_menuitem_t **menu, int item_selected, void *userptr);
 
 int kcugui_menu(kcugui_menuitem_t *menu, char *desc, kcugui_menu_cb_t cb, void *usrptr);
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #endif

@@ -190,7 +190,7 @@ int appfsExists(const char *filename) {
 	return (appfsGetFirstPageFor(filename)==-1)?0:1;
 }
 
-appfs_handle_t appfsOpen(char *filename) {
+appfs_handle_t appfsOpen(const char *filename) {
 	return appfsGetFirstPageFor(filename);
 }
 
@@ -629,6 +629,10 @@ esp_err_t appfsMmap(appfs_handle_t fd, size_t offset, size_t len, const void** o
 	}
 	*out_ptr=((uint8_t*)*out_ptr)+offset;
 	return ESP_OK;
+}
+
+void appfsMunmap(spi_flash_mmap_handle_t handle) {
+	spi_flash_munmap(handle);
 }
 
 //Just mmaps and memcpys the data. Maybe not the fastest ever, but hey, if you want that you should mmap 

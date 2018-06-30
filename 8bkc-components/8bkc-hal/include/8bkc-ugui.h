@@ -1,6 +1,11 @@
 #pragma once
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 /*
 Connector functions between the PocketSprite SDK and uGUI.
 */
@@ -48,3 +53,6 @@ static inline uint16_t kchal_ugui_rgb(uint8_t r, uint8_t g, uint8_t b) {
 	return (v&0xffff);
 }
 
+#ifdef __cplusplus
+}
+#endif

@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define POWERBTN_MENU_NONE 0
 #define POWERBTN_MENU_EXIT 1
 #define POWERBTN_MENU_POWERDOWN 2
@@ -20,3 +24,6 @@
 
 int powerbtn_menu_show(uint16_t *fb);
 
+#ifdef __cplusplus
+}
+#endif

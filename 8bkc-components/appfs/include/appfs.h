@@ -5,6 +5,9 @@
 #include <stdint.h>
 #include "esp_spi_flash.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define APPFS_PART_TYPE 0x43		/*<! Default partition type of an appfs partition */
 #define APPFS_PART_SUBTYPE 0x3		/*<! Default partition subtype of an appfs partition */
@@ -49,7 +52,7 @@ bool appfsFdValid(int fd);
  *
  * @param filename Filename of the file to open
  * @return The filedescriptor if succesful, APPFS_INVALID_FD if not. */
-appfs_handle_t appfsOpen(char *filename);
+appfs_handle_t appfsOpen(const char *filename);
 
 /**
  * @brief Close a file on a mounted appfs
@@ -100,6 +103,15 @@ esp_err_t appfsCreateFile(const char *filename, size_t size, appfs_handle_t *han
  */
 esp_err_t appfsMmap(appfs_handle_t fd, size_t offset, size_t len, const void** out_ptr, 
 									spi_flash_mmap_memory_t memory, spi_flash_mmap_handle_t* out_handle);
+
+/**
+ * @brief Unmap a previously mmap'ped file
+ *
+ * This unmaps a region previously mapped with appfsMmap
+ *
+ * @param handle Handle obtained in the previous appfsMmap call
+ */
+void appfsMunmap(spi_flash_mmap_handle_t handle);
 
 /**
  * @brief Erase a portion of an appfs file
@@ -263,5 +275,10 @@ void appfsBlMunmap();
 esp_err_t appfsBlMapRegions(int fd, AppfsBlRegionToMap *regions, int noRegions);
 
 #endif
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #endif

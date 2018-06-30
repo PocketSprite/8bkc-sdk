@@ -24,6 +24,11 @@
 #define KC_SCREEN_W 80				/*!< Screen width, excluding bezel area */
 #define KC_SCREEN_H 64				/*!< Screen height */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 /**
  * @brief Get PocketSprite hardware version
  *
@@ -271,5 +276,10 @@ static inline uint16_t kchal_fbval_rgb(uint8_t r, uint8_t g, uint8_t b) {
 	uint16_t v=((r>>3)<<11)|((g>>2)<<5)|((b>>3)<<0);
 	return (v>>8)|((v&0xff)<<8);
 }
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #endif

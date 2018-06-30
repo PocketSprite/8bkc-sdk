@@ -1,6 +1,11 @@
 #pragma once
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 /**
  * @brief Structure describing a sound source
  */
@@ -113,3 +118,8 @@ void sndmixer_pause_all();
  * This can be used to undo a sndmixer_pause_all() call.
  */
 void sndmixer_resume_all();
+
+
+#ifdef __cplusplus
+}
+#endif

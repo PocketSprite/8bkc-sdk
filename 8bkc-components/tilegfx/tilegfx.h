@@ -4,6 +4,11 @@ TileGFX: A small tile-based renderer engine for the PocketSprite.
 #pragma once
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 /**
  * @brief Structure describing one frame of animation
  */
@@ -174,3 +179,6 @@ static inline uint16_t tilegfx_get_tile(const tilegfx_map_t *map, int x, int y) 
  */
 uint16_t *tilegfx_get_fb();
 
+#ifdef __cplusplus
+}
+#endif
