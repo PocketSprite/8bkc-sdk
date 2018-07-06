@@ -9,6 +9,7 @@
 #include "freertos/portmacro.h"
 
 #include "8bkc-hal.h"
+#include "sdkconfig.h"
 
 #include "snd_source_wav.h"
 #include "snd_source_mod.h"
@@ -210,6 +211,8 @@ static void sndmixer_task(void *arg) {
 	vTaskDelete(NULL);
 }
 
+//Run on core 1 if enabled, core 0 if not.
+#define MY_CORE (portNUM_PROCESSORS-1)
 
 int sndmixer_init(int p_no_channels, int p_samplerate) {
 	no_channels=p_no_channels;
@@ -223,7 +226,7 @@ int sndmixer_init(int p_no_channels, int p_samplerate) {
 		free(channel);
 		return 0;
 	}
-	int r=xTaskCreatePinnedToCore(&sndmixer_task, "sndmixer", 2048, NULL, 5, NULL, 1);
+	int r=xTaskCreatePinnedToCore(&sndmixer_task, "sndmixer", 2048, NULL, 5, NULL, MY_CORE);
 	if (!r) {
 		free(channel);
 		vQueueDelete(cmd_queue);
