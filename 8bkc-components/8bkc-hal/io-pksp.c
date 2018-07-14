@@ -91,21 +91,26 @@ void ioOledSend(const char *data, int count, int dc) {
 	t.user=(void*)dc;               //D/C info for callback
 	ret=spi_device_transmit(oled_spi_handle, &t);  //Transmit!
 	assert(ret==ESP_OK);            //Should have had no issues.
-
-	GPIO.func_out_sel_cfg[GPIO_OLED_CS_PIN].oen_inv_sel=1;
-	ets_delay_us(10);
-	vbatHist[vbatHistPos++]=adc1_get_voltage(VBAT_ADC_CHAN);
-	if (vbatHistPos>=VBATMEAS_HISTCT) vbatHistPos=0;
-	GPIO.func_out_sel_cfg[GPIO_OLED_CS_PIN].oen_inv_sel=0;
+	if (dc) { //data
+		GPIO.func_out_sel_cfg[GPIO_OLED_CS_PIN].oen_inv_sel=1;
+		SET_PERI_REG_MASK(rtc_gpio_desc[GPIO_OLED_CS_PIN].reg, (rtc_gpio_desc[GPIO_OLED_CS_PIN].mux));
+		ets_delay_us(15);
+		vbatHist[vbatHistPos++]=adc1_get_voltage(VBAT_ADC_CHAN);
+		if (vbatHistPos>=VBATMEAS_HISTCT) vbatHistPos=0;
+		GPIO.func_out_sel_cfg[GPIO_OLED_CS_PIN].oen_inv_sel=0;
+		CLEAR_PERI_REG_MASK(rtc_gpio_desc[GPIO_OLED_CS_PIN].reg, (rtc_gpio_desc[GPIO_OLED_CS_PIN].mux));
+	}
 }
 
 void ioVbatForceMeasure() {
 	GPIO.func_out_sel_cfg[GPIO_OLED_CS_PIN].oen_inv_sel=1;
+	SET_PERI_REG_MASK(rtc_gpio_desc[GPIO_OLED_CS_PIN].reg, (rtc_gpio_desc[GPIO_OLED_CS_PIN].mux));
 	for (int i=0; i<VBATMEAS_HISTCT; i++) {
 		vTaskDelay(1);
 		vbatHist[i]=adc1_get_voltage(VBAT_ADC_CHAN);
 	}
 	GPIO.func_out_sel_cfg[GPIO_OLED_CS_PIN].oen_inv_sel=0;
+	CLEAR_PERI_REG_MASK(rtc_gpio_desc[GPIO_OLED_CS_PIN].reg, (rtc_gpio_desc[GPIO_OLED_CS_PIN].mux));
 }
 
 int ioGetChgStatus() {
