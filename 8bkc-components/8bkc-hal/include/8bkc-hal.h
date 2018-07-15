@@ -48,8 +48,10 @@ int kchal_get_hw_ver();
  * not initialize any of the hardware.
  *
  * @warning For normal use, it is not advised to call this function. Use kchal_init() instead.
+ *
+ * @param flags Bitmap of KCHAL_INIT_* flags
  */
-void kchal_init_sdk();
+void kchal_init_sdk(int flags);
 
 /**
  * @brief Initialize PocketSprite hardware
@@ -58,8 +60,10 @@ void kchal_init_sdk();
  * to work.
  *
  * @warning For normal use, it is not advised to call this function. Use kchal_init() instead.
+ *
+ * @param flags Bitmap of KCHAL_INIT_* flags
  */
-void kchal_init_hw();
+void kchal_init_hw(int flags);
 
 
 /**
@@ -71,6 +75,19 @@ void kchal_init_hw();
  * main function.
  */
 void kchal_init();
+
+
+#define KCHAL_INIT_NO_STDOUT_HDL (1<<0) /*!< Do not install custom stdout handler */
+
+/**
+ * @brief Initialize PocketSprite SDK and hardware in a custom fashion
+ *
+ * Same as kchal_init but takes flags to get custom behaviour
+ *
+ * @param flags Bitmap of KCHAL_INIT_* flags
+ */
+void kchal_init_custom(int flags);
+
 
 
 /**
@@ -260,7 +277,7 @@ void kchal_cal_adc();
  * To facilitate storing things like high-scores, preferences etc, it is possible to use the NVS subsystem
  * of esp-idf. To stop namespace clashes, the PocketSprite SDK allocates a namespace for each installed app.
  * Use this call to get a handle to that namespace; feel free to save whatever fragment you like into it. Please
- * do not use more than a few K here: the NVS partition is shared between all apps. For larger storage, plese
+ * do not use more than a few K here: the NVS partition is shared between all apps. For larger storage, please
  * write to an AppFs file.
  */
 nvs_handle kchal_get_app_nvsh();

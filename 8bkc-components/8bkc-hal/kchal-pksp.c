@@ -8,6 +8,7 @@
 #include "esp_deep_sleep.h"
 #include "nvs.h"
 #include "nvs_flash.h"
+#include "8bkc-vfs-stdout.h"
 
 #include "driver/dac.h"
 #include "soc/rtc_cntl_reg.h"
@@ -214,7 +215,7 @@ uint32_t kchal_rtc_reg_bootup_val() {
 #define INIT_COMMON_DONE 4
 static int initstate=0;
 
-static void kchal_init_common() {
+static void kchal_init_common(int flags) {
 	//Use this info to measure battery voltage. If too low, refuse to start.
 	ioVbatForceMeasure();
 	printf("Battery voltage: %d mv\n", kchal_get_bat_mv());
@@ -227,7 +228,7 @@ static void kchal_init_common() {
 	initstate|=INIT_COMMON_DONE;
 }
 
-void kchal_init_hw() {
+void kchal_init_hw(int flags) {
 	if (initstate&INIT_HW_DONE) return; //already did this
 	oledMux=xSemaphoreCreateMutex();
 	configMux=xSemaphoreCreateMutex();
@@ -240,14 +241,18 @@ void kchal_init_hw() {
 	ssd1331SendFB(fb, 0, 0, OLED_REAL_W, OLED_REAL_H);
 	free(fb);
 	initstate|=INIT_HW_DONE;
-	if (initstate==(INIT_HW_DONE|INIT_SDK_DONE)) kchal_init_common();
+	if (initstate==(INIT_HW_DONE|INIT_SDK_DONE)) kchal_init_common(flags);
 }
 
-void kchal_init_sdk() {
+
+void kchal_init_sdk(int flags) {
 	if (initstate&INIT_SDK_DONE) return; //already did this
 	//Hack: This initializes a bunch of locks etc; that process uses a bunch of stack. If we do not
 	//do it here, it happens in the mgmt task, which is somewhat stack-starved.
 	esp_get_deep_sleep_wake_stub();
+
+	//Use our own stdout handler so we can save stdout/stderr to rtc memory
+	if (!(flags&KCHAL_INIT_NO_STDOUT_HDL)) kchal_stdout_register();
 
 	//If we were force-started during an usb loading cycle, remove that bit so when we shut down we'll go
 	//back to the recharge screen
@@ -297,12 +302,16 @@ void kchal_init_sdk() {
 
 	xTaskCreatePinnedToCore(&kchal_mgmt_task, "kchal", 1024*4, NULL, 5, NULL, 0);
 	initstate|=INIT_SDK_DONE;
-	if (initstate==(INIT_HW_DONE|INIT_SDK_DONE)) kchal_init_common();
+	if (initstate==(INIT_HW_DONE|INIT_SDK_DONE)) kchal_init_common(flags);
+}
+void kchal_init() {
+	kchal_init_hw(0);
+	kchal_init_sdk(0);
 }
 
-void kchal_init() {
-	kchal_init_hw();
-	kchal_init_sdk();
+void kchal_init_custom(int flags) {
+	kchal_init_hw(flags);
+	kchal_init_sdk(flags);
 }
 
 uint32_t kchal_get_keys() {
@@ -509,6 +518,8 @@ void kchal_set_rtc_reg(uint32_t val) {
 
 void kchal_boot_into_new_app() {
 	ioOledPowerDown();
+	//Keep RTC memory, we may store logs there.
+	esp_deep_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_ON);
 	esp_deep_sleep_enable_timer_wakeup(10);
 	esp_deep_sleep_start();
 }
