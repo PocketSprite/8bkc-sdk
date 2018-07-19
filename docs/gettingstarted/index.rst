@@ -22,7 +22,7 @@ PocketSprite SDK, the toolchain needs some setting up; please refer to the ESP-I
 `install it <https://esp-idf.readthedocs.io/en/latest/get-started/index.html>`_.
 
 Note that while ESP-IDF supports Windows, Linux and Mac as development platforms, the PocketSprite SDK for now only 
-supports Linux (and may or may not work out of the box with Mac).  Some users have reported success with using Windows Subsystem for Linux.
+supports Linux (and work on Mac with Brew, see the note below).  Some users have reported success with using Windows Subsystem for Linux.
 
 After you have installed esp-idf using the linked instructions, get the PocketSprite SDK components. Note that the
 SDK still uses the old '8bkc' name as an identifier::
@@ -48,4 +48,10 @@ you would do::
     apt-get install gcc libgd-dev libxml2-dev imagemagick
 
 to install them.
+
+For Mac, ``gcc`` should already come with XCode and need to install the dependencies using Brew instead::
+
+    brew install libgd libxml2 imagemagick
+    
+You can get Brew `here <https://brew.sh/>`_.
 
