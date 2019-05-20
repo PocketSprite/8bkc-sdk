@@ -58,7 +58,7 @@ int output_tileset(FILE *f, char *name, int trans_col, int has_anim) {
 	fprintf(hfile, "extern const tilegfx_tileset_t tileset_%s;\n", name);
 	fprintf(cfile, "\nconst tilegfx_tileset_t tileset_%s={ //%d tiles\n", name, w*h);
 	if (trans_col==-1) {
-		fprintf(cfile, "\t.trans_col=-1; //No transparency\n");
+		fprintf(cfile, "\t.trans_col=-1, //No transparency\n");
 	} else {
 		fprintf(cfile, "\t.trans_col=0x%04X,\n", trans_col);
 	}
